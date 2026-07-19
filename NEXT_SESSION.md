@@ -69,6 +69,39 @@ share uncommitted files between them.
 - First integration action: render every strict scene fixture through the
   reviewed Remotion registry, then mount the same validated spec in Player.
 
+## 2026-07-19 — Utkarsh — `codex/pi-reel-player`
+
+- **Completed:**
+  - Added a strict, deterministic `compileReel()` boundary and a reviewed
+    seven-scene Remotion registry shared by browser preview and server render.
+  - Added offline, content-addressed asset staging plus cancellable still/MP4
+    rendering fixed to H.264/AAC, 1080x1920, 30fps, yuv420p, and 48kHz audio.
+  - Added the fixture-backed reel route with one mounted Player, muted-first
+    autoplay, accessible controls, axis-locked horizontal/vertical navigation,
+    adjacent-only preloading, retry states, and full-screen mobile layout.
+- **Files changed:** `packages/reel-components/`, `reel-renderer/`,
+  `frontend/app/books/[id]/manga/[projectId]/reels/`,
+  `frontend/components/ReelFeed/`, `frontend/package.json`, and the mechanical
+  dependency update in `pnpm-lock.yaml`.
+- **Contract version / impact:** consumes `manga-manifest.v1` and
+  `reel-spec.v1` unchanged; breaking impact: none.
+- **Validation:** `pnpm check` passes; reel-components has 12 passing tests;
+  renderer unit tests have 9 passing tests and 2 explicitly gated real-render
+  tests; the gated Chromium/FFmpeg run passes both the still and complete MP4
+  cases with ffprobe codec, dimensions, frame rate, audio, and duration checks;
+  frontend lint and production build pass; `git diff --check` passes.
+- **Visual evidence:** mobile browser capture at
+  `/tmp/scrollstack-reel-final.png`; the real-render smoke produced a
+  representative 1080x1920 still and a complete 390-frame MP4 before its
+  isolated temporary workspace was cleaned.
+- **Blocker:** none for the fixture-backed vertical slice. Live data, progress
+  persistence, signed media inputs, thumbnails, and persisted render receipts
+  wait on control-plane endpoints/contracts.
+- **Next action / owner:** Mrigesh provides the API payload and persistence
+  seams without changing v1 artifacts; Utkarsh replaces `fixture-adapter.ts`,
+  adds device-level gesture/Playwright coverage, and wires render receipts once
+  those seams land.
+
 ## Handoff template
 
 ### Date — owner — branch/PR
