@@ -2020,6 +2020,9 @@ Owns:
 
 - `backend/app/context_system/`,
 - `backend/app/artifacts/`,
+- `apps/agent-worker/`,
+- `packages/agent-runtime/`,
+- production agent skills and the domain-tool broker,
 - Mongo models and indexes,
 - scope selection and source units,
 - `GenerationRun`/`StageRun`,
@@ -2028,13 +2031,10 @@ Owns:
 - backend contract exports,
 - grounding and manga acceptance tests.
 
-#### Developer B: Pi, reel, and player
+#### Developer B: reel and player
 
 Owns:
 
-- `apps/agent-worker/`,
-- `packages/agent-runtime/`,
-- production agent skills,
 - `reel-renderer/`,
 - `packages/reel-components/`,
 - `ReelSpec` compiler and validation,
