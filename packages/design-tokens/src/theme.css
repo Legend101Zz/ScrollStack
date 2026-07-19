@@ -1,0 +1,48 @@
+:root {
+  color-scheme: dark;
+  --ss-color-shell: #0d0a08;
+  --ss-color-ink: #16100c;
+  --ss-color-ink-raised: #211812;
+  --ss-color-ink-soft: #2e231b;
+  --ss-color-paper: #f2e7d3;
+  --ss-color-paper-soft: #e6d6bb;
+  --ss-color-paper-high: #fbf5e9;
+  --ss-color-accent: #d93b22;
+  --ss-color-accent-deep: #9f2815;
+  --ss-color-accent-soft: #e97a5f;
+  --ss-color-tone: #b3a081;
+  --ss-color-text-primary: #f7eedf;
+  --ss-color-text-secondary: #ddd0ba;
+  --ss-color-text-muted: #b8a88d;
+  --ss-color-paper-text: #33251a;
+  --ss-color-paper-muted: #665642;
+  --ss-color-danger: #bd321d;
+  --ss-line-dark: rgb(20 12 8 / 16%);
+  --ss-line-light: rgb(255 246 232 / 16%);
+
+  --ss-font-display: var(--font-display), "Arial Black", sans-serif;
+  --ss-font-ui: var(--font-ui), system-ui, sans-serif;
+
+  --ss-radius-input: 0.5rem;
+  --ss-radius-panel: 0.875rem;
+  --ss-radius-control: 9999px;
+
+  --ss-page-inline: clamp(1rem, 4vw, 2rem);
+  --ss-section-space: clamp(4rem, 8vw, 7rem);
+  --ss-manga-gutter: clamp(0.45rem, 1.4vw, 0.75rem);
+
+  --ss-motion-quick: 140ms;
+  --ss-motion-base: 240ms;
+  --ss-motion-slow: 600ms;
+  --ss-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+
+  --ss-z-base: 0;
+  --ss-z-chrome: 20;
+  --ss-z-popover: 30;
+  --ss-z-dialog: 40;
+  --ss-z-grain: 50;
+
+  --ss-reel-safe-top: 10%;
+  --ss-reel-safe-bottom: 18%;
+  --ss-reel-safe-side: 6%;
+}

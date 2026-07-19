@@ -1,0 +1,132 @@
+name: scrollstack
+
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  backend:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    environment:
+      MONGODB_URI: ${MONGODB_URI:-mongodb://mongo:27017/scrollstack}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      MEDIA_ROOT: /data/media
+      AGENT_WORKER_URL: ${AGENT_WORKER_URL:-http://agent_worker:8788}
+      AGENT_WORKER_TOKEN: ${AGENT_WORKER_TOKEN:-replace-with-a-long-random-token}
+      DOMAIN_TOOL_BROKER_TOKEN: ${DOMAIN_TOOL_BROKER_TOKEN:-replace-with-a-third-long-random-token}
+      AGENTIC_MANGA_PIPELINE_V1: ${AGENTIC_MANGA_PIPELINE_V1:-false}
+      REELS_ENABLED: ${REELS_ENABLED:-false}
+      REEL_EXPORT_ENABLED: ${REEL_EXPORT_ENABLED:-false}
+      ALLOW_LLM_CODEGEN: "false"
+    ports:
+      - "8000:8000"
+    volumes:
+      - media_data:/data/media
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  celery_worker:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    command: ["uv", "run", "celery", "-A", "app.worker.celery_app", "worker", "--loglevel=INFO"]
+    environment:
+      MONGODB_URI: ${MONGODB_URI:-mongodb://mongo:27017/scrollstack}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      MEDIA_ROOT: /data/media
+      AGENT_WORKER_URL: ${AGENT_WORKER_URL:-http://agent_worker:8788}
+      AGENT_WORKER_TOKEN: ${AGENT_WORKER_TOKEN:-replace-with-a-long-random-token}
+      AGENTIC_MANGA_PIPELINE_V1: ${AGENTIC_MANGA_PIPELINE_V1:-false}
+      ALLOW_LLM_CODEGEN: "false"
+    volumes:
+      - media_data:/data/media
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  agent_worker:
+    profiles: ["agent"]
+    build:
+      context: .
+      dockerfile: apps/agent-worker/Dockerfile
+    restart: unless-stopped
+    environment:
+      AGENT_WORKER_TOKEN: ${AGENT_WORKER_TOKEN:-replace-with-a-long-random-token}
+      AGENT_PROVIDER: ${AGENT_PROVIDER:-openai}
+      AGENT_MODEL: ${AGENT_MODEL:-}
+      AGENT_MODEL_API_KEY_ENV: ${AGENT_MODEL_API_KEY_ENV:-OPENAI_API_KEY}
+      AGENT_MAX_CONCURRENCY: ${AGENT_MAX_CONCURRENCY:-2}
+      AGENT_SESSION_DIR: /data/agent-sessions
+      DOMAIN_TOOL_BROKER_URL: ${DOMAIN_TOOL_BROKER_URL:-http://backend:8000}
+      DOMAIN_TOOL_BROKER_TOKEN: ${DOMAIN_TOOL_BROKER_TOKEN:-replace-with-a-third-long-random-token}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      MINIMAX_API_KEY: ${MINIMAX_API_KEY:-}
+      ALLOW_LLM_CODEGEN: "false"
+    volumes:
+      - agent_sessions:/data/agent-sessions
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  reel_render_worker:
+    profiles: ["reels"]
+    build:
+      context: ./reel-renderer
+    restart: unless-stopped
+    environment:
+      RENDER_OUTPUT_DIR: /data/render-output
+      ALLOW_LLM_CODEGEN: "false"
+    volumes:
+      - media_data:/data/media:ro
+      - render_output:/data/render-output
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+    ports:
+      - "3000:3000"
+    depends_on:
+      backend:
+        condition: service_started
+
+volumes:
+  agent_sessions:
+  media_data:
+  mongo_data:
+  redis_data:
+  render_output:

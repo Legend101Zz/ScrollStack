@@ -1,0 +1,11 @@
+.git
+.env
+.DS_Store
+**/.next
+**/.venv
+**/__pycache__
+**/node_modules
+**/dist
+media
+agent-sessions
+render-output

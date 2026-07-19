@@ -1,4 +1,4 @@
-# Book-Reel Technical Architecture and Build Specification
+# ScrollStack Technical Architecture and Build Specification
 
 **Status:** Proposed target architecture; implementation blueprint, not a claim that every component exists today  
 **Last updated:** 2026-07-19
@@ -7,7 +7,7 @@
 
 ## 1. Executive decision
 
-Book-Reel is an entertainment-first adaptation system:
+ScrollStack is an entertainment-first adaptation system:
 
 ```text
 PDF
@@ -191,7 +191,7 @@ control plane does that after validating and persisting the output.
 The Node agent worker owns:
 
 - construction of bounded Pi sessions,
-- loading reviewed Book-Reel skills,
+- loading reviewed ScrollStack skills,
 - registering custom domain tools,
 - model invocation through Pi,
 - session-local compaction and repair,
@@ -305,7 +305,7 @@ Use a pnpm workspace for JavaScript/TypeScript while leaving the Python backend
 in place. Do not perform a directory-renaming migration during the hackathon.
 
 ```text
-Book-Reel/
+ScrollStack/
 ├── backend/                         # Existing FastAPI + Celery control plane
 │   ├── app/
 │   │   ├── api/
@@ -755,7 +755,7 @@ Agent repair loops are capped at two. Endless self-repair is not resilience.
 ### 9.1 Import strategy
 
 Use the published Pi SDK as an exact dependency of
-`packages/agent-runtime`. Do not copy the Pi repository into Book-Reel.
+`packages/agent-runtime`. Do not copy the Pi repository into ScrollStack.
 
 ```json
 {
@@ -959,7 +959,7 @@ Pi as competing workflow orchestrators.
 
 ### 10.1 Production skills
 
-Create small Book-Reel skills owned by this repository:
+Create small ScrollStack skills owned by this repository:
 
 ```text
 apps/agent-worker/src/skills/
@@ -984,7 +984,7 @@ apps/agent-worker/src/skills/
         └── reel-safe-zones.md
 ```
 
-Production skills teach the agent to emit Book-Reel contracts. They do not
+Production skills teach the agent to emit ScrollStack contracts. They do not
 teach it to edit files or run render commands.
 
 ### 10.2 Remotion component-authoring skill
@@ -999,7 +999,7 @@ It may use:
 
 - the official `remotion-dev/skills` guidance,
 - selected reviewed ideas from `haidrrrry/claude-remotion-skill`,
-- the Book-Reel visual system,
+- the ScrollStack visual system,
 - a mandatory render/frame-inspection loop.
 
 This skill is used by developers or a sandboxed component-authoring agent to
@@ -1911,8 +1911,8 @@ TypeScript workspace target:
 
 ```bash
 pnpm install --frozen-lockfile
-pnpm --filter @book-reel/contracts test
-pnpm --filter @book-reel/agent-runtime test
+pnpm --filter @scrollstack/contracts test
+pnpm --filter @scrollstack/agent-runtime test
 pnpm --filter reel-renderer test
 ```
 

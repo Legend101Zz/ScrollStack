@@ -15,6 +15,10 @@ visual language. This includes:
   ingestion, and manga pipeline work;
 - `packages/contracts/` schema sources and generated contract artifacts;
 - `packages/fixtures/` canonical cross-language fixtures;
+- `apps/agent-worker/` and `packages/agent-runtime/`, including the pinned Pi
+  adapter, production skills, internal worker API, and domain tool broker;
+- `packages/design-tokens/`, including the framework-neutral tokens consumed by
+  both the frontend and the reel lane;
 - global theme and layout files, including Tailwind configuration and global
   CSS;
 - root workspace/package configuration and `docker-compose.yml`.
