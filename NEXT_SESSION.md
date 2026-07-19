@@ -4,7 +4,7 @@
 
 - **Integration branch:** `main` (PR-only)
 - **Core/manga/theme owner:** Mrigesh
-- **Reel renderer/player owner:** reel player developer
+- **Reel renderer/player owner:** Utkarsh
 - **Canonical seam owner:** Mrigesh (`packages/contracts/` and Pydantic exports)
 - **Architecture source:** `technical-imp.md`
 

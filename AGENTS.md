@@ -19,9 +19,9 @@ visual language. This includes:
   CSS;
 - root workspace/package configuration and `docker-compose.yml`.
 
-### Reel player owner — Remotion and reel UX
+### Utkarsh — Remotion and reel UX
 
-The reel player owner owns the deterministic reel renderer and the isolated
+Utkarsh owns the deterministic reel renderer and the isolated
 reel user experience. This includes:
 
 - `reel-renderer/`;
@@ -42,7 +42,7 @@ cross-language data seam.
 - Mrigesh owns canonical Pydantic model changes and commits regenerated JSON
   Schema and TypeScript artifacts with the source change.
 - Generated files are never hand-edited.
-- The reel player owner requests missing data through an issue or PR comment
+- Utkarsh requests missing data through an issue or PR comment
   that states the field, consumer, and a fixture example.
 - Both contributors must review a breaking contract change before it merges.
 - Root package files, `pnpm-workspace.yaml`, Docker Compose, shared generated
