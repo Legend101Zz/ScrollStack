@@ -7,13 +7,15 @@ dependencies = [
   "beanie==2.0.0",
   "celery[redis]==5.5.3",
   "fastapi==0.116.1",
+  "httpx==0.28.1",
   "pydantic==2.11.7",
+  "pymupdf==1.24.14",
+  "python-multipart==0.0.12",
   "uvicorn[standard]==0.35.0",
 ]
 
 [dependency-groups]
 dev = [
-  "httpx==0.28.1",
   "mypy==1.17.1",
   "pytest==8.4.1",
   "ruff==0.12.7",
@@ -40,6 +42,10 @@ exclude = ["scripts/"]
 
 [[tool.mypy.overrides]]
 module = ["celery", "celery.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["pymupdf"]
 ignore_missing_imports = true
 
 [build-system]

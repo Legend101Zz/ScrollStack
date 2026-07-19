@@ -24,5 +24,11 @@ class CeleryWorkflowDispatcher:
         celery_app.send_task("scrollstack.execute_generation_run", args=[run_id])
 
 
+class CeleryPdfIngestionDispatcher:
+    def enqueue_pdf_ingestion(self, book_id: str) -> str:
+        result = celery_app.send_task("scrollstack.parse_pdf_source", args=[book_id])
+        return str(result.id)
+
+
 # Docker Compose invokes ``-A app.worker.celery_app`` and Celery looks for this name.
 app = celery_app

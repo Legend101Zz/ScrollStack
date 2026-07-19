@@ -6,7 +6,7 @@ from datetime import datetime
 
 from app.contracts.source import PageRange, ScopeManifest
 from app.persistence.documents import ScopeManifestDoc, construct_document, utc_now
-from app.persistence.protocols import ScopeRepository, SourceUnitRepository
+from app.persistence.protocols import MemoryRepository, ScopeRepository, SourceUnitRepository
 
 from .errors import InvalidScopeError
 from .hashing import content_hash
@@ -17,9 +17,11 @@ class ScopeService:
         self,
         source_units: SourceUnitRepository,
         scopes: ScopeRepository,
+        memory: MemoryRepository | None = None,
     ) -> None:
         self._source_units = source_units
         self._scopes = scopes
+        self._memory = memory
 
     async def create(
         self,
@@ -31,6 +33,12 @@ class ScopeService:
         created_by: str,
         created_at: datetime | None = None,
     ) -> ScopeManifest:
+        if self._memory is not None:
+            project = await self._memory.get_project(project_id)
+            if project is None or project.book_id != book_id:
+                raise InvalidScopeError(
+                    f"Project {project_id} does not belong to book {book_id}"
+                )
         units = await self._source_units.list_source_units(book_id)
         selected = [
             unit

@@ -10,6 +10,7 @@
     { "schema": "context_pack.v1", "path": "canonical/context_pack.v1.json" },
     { "schema": "generation_run.v1", "path": "canonical/generation_run.v1.json" },
     { "schema": "manga_manifest.v1", "path": "canonical/manga_manifest.v1.json" },
+    { "schema": "manga_plan.v1", "path": "canonical/manga_plan.v1.json" },
     { "schema": "memory_delta.v1", "path": "canonical/memory_delta.v1.json" },
     { "schema": "model_receipt.v1", "path": "canonical/model_receipt.v1.json" },
     { "schema": "reel_spec.v1", "path": "canonical/reel_spec.v1.json" },

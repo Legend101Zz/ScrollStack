@@ -78,10 +78,22 @@ export type SchemaVersion = "memory-delta.v1";
  * @maxItems 1000
  */
 export type SourceArtifactIds = [string, ...string[]];
+export type CanonicalForm = string;
+export type Meaning = string;
+/**
+ * @minItems 1
+ * @maxItems 128
+ */
+export type SourceRefs4 = [SourceRef, ...SourceRef[]];
+export type Term = string;
+/**
+ * @maxItems 512
+ */
+export type TerminologyUpdates = TerminologyUpdate[];
 /**
  * @maxItems 128
  */
-export type SourceRefs4 = SourceRef[];
+export type SourceRefs5 = SourceRef[];
 export type Status = "open" | "resolved" | "deferred";
 export type Summary = string;
 export type ThreadId = string;
@@ -100,6 +112,7 @@ export interface MemoryDelta {
   project_id: ProjectId;
   schema_version: SchemaVersion;
   source_artifact_ids: SourceArtifactIds;
+  terminology_updates?: TerminologyUpdates;
   unresolved_thread_updates?: UnresolvedThreadUpdates;
 }
 export interface CharacterStateUpdate {
@@ -142,8 +155,14 @@ export interface GroundedFact {
   fact_id: FactId1;
   source_refs: SourceRefs3;
 }
+export interface TerminologyUpdate {
+  canonical_form: CanonicalForm;
+  meaning: Meaning;
+  source_refs: SourceRefs4;
+  term: Term;
+}
 export interface StoryThreadUpdate {
-  source_refs?: SourceRefs4;
+  source_refs?: SourceRefs5;
   status: Status;
   summary: Summary;
   thread_id: ThreadId;

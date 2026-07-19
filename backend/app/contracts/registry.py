@@ -6,7 +6,7 @@ from pydantic import BaseModel
 
 from .artifacts import Artifact, ArtifactRef, AssetRef, AssetRequest, ModelReceipt
 from .context import AgentGoal, ContextPack, MemoryDelta
-from .manga import AdaptationBeat, MangaManifest, RenderedPage
+from .manga import AdaptationBeat, MangaManifest, MangaPlan, RenderedPage
 from .reel import ReelSpec
 from .runs import GenerationRun, StageRun
 from .source import ScopeManifest, SourceRef, SourceUnit
@@ -22,6 +22,7 @@ CONTRACT_MODELS: dict[str, type[BaseModel]] = {
     "context_pack.v1": ContextPack,
     "generation_run.v1": GenerationRun,
     "manga_manifest.v1": MangaManifest,
+    "manga_plan.v1": MangaPlan,
     "memory_delta.v1": MemoryDelta,
     "model_receipt.v1": ModelReceipt,
     "reel_spec.v1": ReelSpec,

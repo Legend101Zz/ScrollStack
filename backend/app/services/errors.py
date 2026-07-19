@@ -31,3 +31,19 @@ class MemoryConflictError(ControlPlaneError):
 
 class InvalidRunStateError(ControlPlaneError):
     code = "invalid_run_state"
+
+
+class InvalidPdfError(ControlPlaneError):
+    code = "invalid_pdf"
+
+
+class PdfLimitError(ControlPlaneError):
+    code = "pdf_limit_exceeded"
+
+
+class AuthorizationError(ControlPlaneError):
+    code = "authorization_failed"
+
+
+class ArtifactValidationError(ControlPlaneError):
+    code = "artifact_validation_failed"

@@ -6,6 +6,7 @@ from typing import Protocol
 
 from .documents import (
     ArtifactDoc,
+    BookDoc,
     GenerationRunDoc,
     MangaProjectDoc,
     ProjectMemorySnapshotDoc,
@@ -13,6 +14,16 @@ from .documents import (
     SourceUnitDoc,
     StageRunDoc,
 )
+
+
+class BookRepository(Protocol):
+    async def create_book_if_absent(self, book: BookDoc) -> tuple[BookDoc, bool]: ...
+
+    async def get_book(self, book_id: str) -> BookDoc | None: ...
+
+    async def list_books(self, owner_id: str | None = None) -> list[BookDoc]: ...
+
+    async def save_book(self, book: BookDoc) -> BookDoc: ...
 
 
 class SourceUnitRepository(Protocol):
@@ -36,6 +47,10 @@ class MemoryRepository(Protocol):
 
     async def save_project(self, project: MangaProjectDoc) -> MangaProjectDoc: ...
 
+    async def save_memory_snapshot(
+        self, snapshot: ProjectMemorySnapshotDoc
+    ) -> ProjectMemorySnapshotDoc: ...
+
     async def get_memory_snapshot(
         self, project_id: str, memory_version: int
     ) -> ProjectMemorySnapshotDoc | None: ...
@@ -49,6 +64,10 @@ class MemoryRepository(Protocol):
 
 
 class ArtifactRepository(Protocol):
+    async def save_artifact(self, artifact: ArtifactDoc) -> ArtifactDoc: ...
+
+    async def get_artifact(self, artifact_id: str) -> ArtifactDoc | None: ...
+
     async def list_artifacts(self, run_id: str, *, accepted_only: bool) -> list[ArtifactDoc]: ...
 
 
@@ -63,6 +82,8 @@ class RunRepository(Protocol):
 
     async def list_stages(self, run_id: str) -> list[StageRunDoc]: ...
 
+    async def get_stage(self, stage_run_id: str) -> StageRunDoc | None: ...
+
     async def save_stage(self, stage: StageRunDoc) -> StageRunDoc: ...
 
 
@@ -70,7 +91,12 @@ class WorkflowDispatcher(Protocol):
     def enqueue_generation_run(self, run_id: str) -> None: ...
 
 
+class PdfIngestionDispatcher(Protocol):
+    def enqueue_pdf_ingestion(self, book_id: str) -> str: ...
+
+
 class Repositories(
+    BookRepository,
     SourceUnitRepository,
     ScopeRepository,
     MemoryRepository,

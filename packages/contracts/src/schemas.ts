@@ -7,6 +7,7 @@ import assetRequest from "../schema/asset_request.v1.schema.json" with { type: "
 import contextPack from "../schema/context_pack.v1.schema.json" with { type: "json" };
 import generationRun from "../schema/generation_run.v1.schema.json" with { type: "json" };
 import mangaManifest from "../schema/manga_manifest.v1.schema.json" with { type: "json" };
+import mangaPlan from "../schema/manga_plan.v1.schema.json" with { type: "json" };
 import memoryDelta from "../schema/memory_delta.v1.schema.json" with { type: "json" };
 import modelReceipt from "../schema/model_receipt.v1.schema.json" with { type: "json" };
 import reelSpec from "../schema/reel_spec.v1.schema.json" with { type: "json" };
@@ -26,6 +27,7 @@ export const contractSchemas = {
   "context_pack.v1": contextPack,
   "generation_run.v1": generationRun,
   "manga_manifest.v1": mangaManifest,
+  "manga_plan.v1": mangaPlan,
   "memory_delta.v1": memoryDelta,
   "model_receipt.v1": modelReceipt,
   "reel_spec.v1": reelSpec,

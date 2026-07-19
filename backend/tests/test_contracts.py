@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any, cast
 
 import pytest
 from pydantic import ValidationError
@@ -15,12 +16,15 @@ from scripts.export_contracts import DEFAULT_OUTPUT, export_contracts
 FIXTURE_ROOT = Path(__file__).resolve().parents[2] / "packages" / "fixtures"
 
 
-def fixture_manifest() -> dict:
-    return json.loads((FIXTURE_ROOT / "manifest.json").read_text(encoding="utf-8"))
+def fixture_manifest() -> dict[str, Any]:
+    return cast(
+        dict[str, Any],
+        json.loads((FIXTURE_ROOT / "manifest.json").read_text(encoding="utf-8")),
+    )
 
 
 @pytest.mark.parametrize("entry", fixture_manifest()["fixtures"])
-def test_canonical_fixture_validates_in_python(entry: dict) -> None:
+def test_canonical_fixture_validates_in_python(entry: dict[str, Any]) -> None:
     payload = (FIXTURE_ROOT / entry["path"]).read_text(encoding="utf-8")
     model = CONTRACT_MODELS[entry["schema"]]
 

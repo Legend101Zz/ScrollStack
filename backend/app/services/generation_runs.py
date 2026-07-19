@@ -103,6 +103,7 @@ class GenerationRunService:
             scope_id=request.scope_id,
             requested_outputs=sorted(request.requested_outputs),
             pipeline_version=request.pipeline_version,
+            memory_version=project.active_memory_version,
             status=GenerationRunStatus.QUEUED.value,
             budget=request.budget.model_dump(mode="json"),
             created_by=request.created_by,

@@ -1,14 +1,19 @@
-"""Bounded Phase 1 workflow entrypoint.
-
-This task intentionally returns the authoritative plan until the legacy manga
-pipeline is connected. It does not pretend that generation succeeded.
-"""
+"""Celery-owned PDF ingestion and durable generation stage entrypoints."""
 
 from __future__ import annotations
 
+import asyncio
+import os
+from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
-from .authority import WorkflowAuthority
+from app.persistence.mongo import initialize_mongo
+from app.persistence.repositories import BeanieRepositories
+from app.services.agent_worker import HttpAgentWorkerClient
+from app.services.generation_workflow import GenerationWorkflowService
+from app.services.pdf_ingestion import PdfIngestionService
+
 from .celery_app import celery_app
 
 
@@ -17,10 +22,57 @@ from .celery_app import celery_app
 )
 def execute_generation_run(self: Any, run_id: str) -> dict[str, object]:
     del self
-    plan = WorkflowAuthority().plan(run_id)
-    return {
-        "run_id": plan.run_id,
-        "pipeline_version": plan.pipeline_version,
-        "planned_stages": list(plan.stages),
-        "status": "planned",
-    }
+
+    async def run() -> dict[str, object]:
+        mongo_uri = os.environ["MONGODB_URI"]
+        parsed = urlparse(mongo_uri)
+        client = await initialize_mongo(
+            mongo_uri, parsed.path.lstrip("/") or "scrollstack"
+        )
+        try:
+            repositories = BeanieRepositories()
+            agentic_enabled = os.getenv("AGENTIC_MANGA_PIPELINE_V1", "false").lower() == "true"
+            agent_worker = None
+            agent_worker_token = os.getenv("AGENT_WORKER_TOKEN")
+            if agentic_enabled and agent_worker_token:
+                agent_worker = HttpAgentWorkerClient(
+                    base_url=os.getenv("AGENT_WORKER_URL", "http://agent_worker:8788"),
+                    token=agent_worker_token,
+                )
+            result = await GenerationWorkflowService(
+                repositories,
+                agent_worker=agent_worker,
+                agentic_enabled=agentic_enabled,
+            ).execute(run_id)
+            return result.model_dump(mode="json")
+        finally:
+            await client.close()
+
+    return asyncio.run(run())
+
+
+@celery_app.task(name="scrollstack.parse_pdf_source")  # type: ignore[misc]
+def parse_pdf_source(book_id: str) -> dict[str, object]:
+    async def run() -> dict[str, object]:
+        mongo_uri = os.environ["MONGODB_URI"]
+        parsed = urlparse(mongo_uri)
+        client = await initialize_mongo(
+            mongo_uri, parsed.path.lstrip("/") or "scrollstack"
+        )
+        try:
+            repositories = BeanieRepositories()
+            service = PdfIngestionService(
+                repositories,
+                repositories,
+                media_root=Path(os.getenv("MEDIA_ROOT", "/data/media")),
+            )
+            book = await service.parse_registered_book(book_id)
+            return {
+                "book_id": book.book_id,
+                "status": book.status,
+                "total_pages": book.total_pages,
+            }
+        finally:
+            await client.close()
+
+    return asyncio.run(run())
