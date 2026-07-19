@@ -1,10 +1,15 @@
 # Mrigesh core and visual system handoff
 
-**Snapshot:** 2026-07-19  
-**Repository:** `Legend101Zz/ScrollStack`  
-**Branch:** `codex/manga-context-control-plane`  
-**Worktree:** `/Volumes/Mrigesh SSD/Scrollhack/ScrollStack-manga`  
-**Implementation baseline:** `82cf96c` (`docs: align ownership with reel-only lane`)  
+**Snapshot:** 2026-07-19
+
+**Repository:** `Legend101Zz/ScrollStack`
+
+**Branch:** `codex/manga-context-control-plane`
+
+**Worktree:** `/Volumes/Mrigesh SSD/Scrollhack/ScrollStack-manga`
+
+**Implementation baseline:** `82cf96c` (`docs: align ownership with reel-only lane`)
+
 **Architecture source of truth:** [`technical-imp.md`](technical-imp.md)
 
 This document is the execution handoff for Mrigesh's lane. It records what was
