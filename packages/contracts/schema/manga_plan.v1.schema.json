@@ -1,5 +1,157 @@
 {
   "$defs": {
+    "AdaptationBeat": {
+      "additionalProperties": false,
+      "properties": {
+        "beat_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Beat Id",
+          "type": "string"
+        },
+        "book_essence": {
+          "maxLength": 20000,
+          "minLength": 1,
+          "title": "Book Essence",
+          "type": "string"
+        },
+        "character_intent": {
+          "items": {
+            "$ref": "#/$defs/CharacterIntent"
+          },
+          "maxItems": 64,
+          "title": "Character Intent",
+          "type": "array"
+        },
+        "confidence": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "dramatization": {
+          "maxLength": 20000,
+          "minLength": 1,
+          "title": "Dramatization",
+          "type": "string"
+        },
+        "may_compress": {
+          "items": {
+            "maxLength": 20000,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 128,
+          "title": "May Compress",
+          "type": "array"
+        },
+        "must_preserve": {
+          "items": {
+            "maxLength": 20000,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 128,
+          "minItems": 1,
+          "title": "Must Preserve",
+          "type": "array"
+        },
+        "narrative_purpose": {
+          "enum": [
+            "hook",
+            "setup",
+            "conflict",
+            "explanation",
+            "reveal",
+            "payoff",
+            "cliffhanger"
+          ],
+          "title": "Narrative Purpose",
+          "type": "string"
+        },
+        "required_fact_ids": {
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "type": "string"
+          },
+          "maxItems": 128,
+          "title": "Required Fact Ids",
+          "type": "array"
+        },
+        "sequence": {
+          "minimum": 0,
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "source_refs": {
+          "items": {
+            "$ref": "#/$defs/SourceRef"
+          },
+          "maxItems": 128,
+          "minItems": 1,
+          "title": "Source Refs",
+          "type": "array"
+        },
+        "visual_intent": {
+          "items": {
+            "maxLength": 500,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 64,
+          "minItems": 1,
+          "title": "Visual Intent",
+          "type": "array"
+        }
+      },
+      "required": [
+        "beat_id",
+        "sequence",
+        "source_refs",
+        "narrative_purpose",
+        "book_essence",
+        "dramatization",
+        "visual_intent",
+        "must_preserve",
+        "confidence"
+      ],
+      "title": "AdaptationBeat",
+      "type": "object"
+    },
+    "CharacterIntent": {
+      "additionalProperties": false,
+      "properties": {
+        "character_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Character Id",
+          "type": "string"
+        },
+        "emotional_state": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Emotional State",
+          "type": "string"
+        },
+        "intent": {
+          "maxLength": 20000,
+          "minLength": 1,
+          "title": "Intent",
+          "type": "string"
+        }
+      },
+      "required": [
+        "character_id",
+        "intent",
+        "emotional_state"
+      ],
+      "title": "CharacterIntent",
+      "type": "object"
+    },
     "CharacterStateUpdate": {
       "additionalProperties": false,
       "properties": {
@@ -39,76 +191,6 @@
         "state_patch"
       ],
       "title": "CharacterStateUpdate",
-      "type": "object"
-    },
-    "ContinuityUpdate": {
-      "additionalProperties": false,
-      "properties": {
-        "key": {
-          "maxLength": 128,
-          "minLength": 1,
-          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
-          "title": "Key",
-          "type": "string"
-        },
-        "source_refs": {
-          "items": {
-            "$ref": "#/$defs/SourceRef"
-          },
-          "maxItems": 128,
-          "title": "Source Refs",
-          "type": "array"
-        },
-        "value": {
-          "$ref": "#/$defs/JsonValue"
-        }
-      },
-      "required": [
-        "key",
-        "value"
-      ],
-      "title": "ContinuityUpdate",
-      "type": "object"
-    },
-    "FactCorrection": {
-      "additionalProperties": false,
-      "properties": {
-        "fact_id": {
-          "maxLength": 128,
-          "minLength": 1,
-          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
-          "title": "Fact Id",
-          "type": "string"
-        },
-        "reason": {
-          "maxLength": 20000,
-          "minLength": 1,
-          "title": "Reason",
-          "type": "string"
-        },
-        "replacement_claim": {
-          "maxLength": 20000,
-          "minLength": 1,
-          "title": "Replacement Claim",
-          "type": "string"
-        },
-        "source_refs": {
-          "items": {
-            "$ref": "#/$defs/SourceRef"
-          },
-          "maxItems": 128,
-          "minItems": 1,
-          "title": "Source Refs",
-          "type": "array"
-        }
-      },
-      "required": [
-        "fact_id",
-        "replacement_claim",
-        "reason",
-        "source_refs"
-      ],
-      "title": "FactCorrection",
       "type": "object"
     },
     "GroundedFact": {
@@ -153,46 +235,6 @@
       "type": "object"
     },
     "JsonValue": {},
-    "SourceCoverage": {
-      "additionalProperties": false,
-      "properties": {
-        "beat_ids": {
-          "items": {
-            "maxLength": 128,
-            "minLength": 1,
-            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
-            "type": "string"
-          },
-          "maxItems": 1000,
-          "minItems": 1,
-          "title": "Beat Ids",
-          "type": "array"
-        },
-        "coverage_status": {
-          "enum": [
-            "covered",
-            "partially_covered",
-            "deferred"
-          ],
-          "title": "Coverage Status",
-          "type": "string"
-        },
-        "source_unit_id": {
-          "maxLength": 128,
-          "minLength": 1,
-          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
-          "title": "Source Unit Id",
-          "type": "string"
-        }
-      },
-      "required": [
-        "source_unit_id",
-        "beat_ids",
-        "coverage_status"
-      ],
-      "title": "SourceCoverage",
-      "type": "object"
-    },
     "SourceRef": {
       "additionalProperties": false,
       "properties": {
@@ -359,54 +401,59 @@
       "type": "object"
     }
   },
-  "$id": "https://scrollstack.dev/contracts/memory_delta.v1.schema.json",
+  "$id": "https://scrollstack.dev/contracts/manga_plan.v1.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
-    "base_memory_version": {
-      "minimum": 0,
-      "title": "Base Memory Version",
-      "type": "integer"
+    "beats": {
+      "items": {
+        "$ref": "#/$defs/AdaptationBeat"
+      },
+      "maxItems": 1000,
+      "minItems": 1,
+      "title": "Beats",
+      "type": "array"
     },
     "character_state_updates": {
       "items": {
         "$ref": "#/$defs/CharacterStateUpdate"
       },
-      "maxItems": 1000,
+      "maxItems": 256,
       "title": "Character State Updates",
       "type": "array"
     },
-    "continuity_updates": {
-      "items": {
-        "$ref": "#/$defs/ContinuityUpdate"
-      },
-      "maxItems": 1000,
-      "title": "Continuity Updates",
-      "type": "array"
+    "context_pack_id": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+      "title": "Context Pack Id",
+      "type": "string"
     },
-    "coverage_additions": {
-      "items": {
-        "$ref": "#/$defs/SourceCoverage"
-      },
-      "maxItems": 1000,
-      "title": "Coverage Additions",
-      "type": "array"
+    "ending_state": {
+      "maxLength": 20000,
+      "minLength": 1,
+      "title": "Ending State",
+      "type": "string"
     },
-    "fact_corrections": {
-      "items": {
-        "$ref": "#/$defs/FactCorrection"
-      },
-      "maxItems": 1000,
-      "title": "Fact Corrections",
-      "type": "array"
+    "memory_version": {
+      "minimum": 0,
+      "title": "Memory Version",
+      "type": "integer"
     },
     "new_facts": {
       "items": {
         "$ref": "#/$defs/GroundedFact"
       },
-      "maxItems": 2000,
+      "maxItems": 1000,
       "title": "New Facts",
       "type": "array"
+    },
+    "plan_id": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+      "title": "Plan Id",
+      "type": "string"
     },
     "project_id": {
       "maxLength": 128,
@@ -416,45 +463,65 @@
       "type": "string"
     },
     "schema_version": {
-      "const": "memory-delta.v1",
+      "const": "manga-plan.v1",
       "title": "Schema Version",
       "type": "string"
     },
-    "source_artifact_ids": {
-      "items": {
-        "maxLength": 128,
-        "minLength": 1,
-        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
-        "type": "string"
-      },
-      "maxItems": 1000,
-      "minItems": 1,
-      "title": "Source Artifact Ids",
-      "type": "array"
+    "scope_id": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+      "title": "Scope Id",
+      "type": "string"
+    },
+    "summary": {
+      "maxLength": 20000,
+      "minLength": 1,
+      "title": "Summary",
+      "type": "string"
+    },
+    "target_page_count": {
+      "maximum": 100,
+      "minimum": 1,
+      "title": "Target Page Count",
+      "type": "integer"
     },
     "terminology_updates": {
       "items": {
         "$ref": "#/$defs/TerminologyUpdate"
       },
-      "maxItems": 512,
+      "maxItems": 256,
       "title": "Terminology Updates",
       "type": "array"
+    },
+    "title": {
+      "maxLength": 500,
+      "minLength": 1,
+      "title": "Title",
+      "type": "string"
     },
     "unresolved_thread_updates": {
       "items": {
         "$ref": "#/$defs/StoryThreadUpdate"
       },
-      "maxItems": 1000,
+      "maxItems": 256,
       "title": "Unresolved Thread Updates",
       "type": "array"
     }
   },
   "required": [
     "schema_version",
+    "plan_id",
     "project_id",
-    "base_memory_version",
-    "source_artifact_ids"
+    "scope_id",
+    "context_pack_id",
+    "memory_version",
+    "title",
+    "summary",
+    "target_page_count",
+    "beats",
+    "ending_state"
   ],
-  "title": "MemoryDelta",
+  "title": "MangaPlan",
   "type": "object"
 }

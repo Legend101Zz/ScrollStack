@@ -10,6 +10,7 @@ from app.contracts.context import GenerationConstraints, MemoryDelta
 from app.contracts.runs import GenerationBudget
 from app.contracts.source import PageRange
 from app.persistence.documents import (
+    ArtifactDoc,
     GenerationRunDoc,
     MangaProjectDoc,
     ProjectMemorySnapshotDoc,
@@ -226,19 +227,26 @@ def test_next_slice_context_includes_previous_ending_and_is_reproducible() -> No
     memory = memory_snapshot(unit)
     next_scope = scope([unit.source_unit_id], "scope_next")
     next_scope.page_ranges = [{"page_start": 11, "page_end": 20}]
-    inputs = {
-        "project_id": "project_1",
-        "scope": next_scope,
-        "memory": memory,
-        "source_units": [unit],
-        "purpose": "manga_composition",
-        "constraints": constraints(),
-        "max_input_tokens": 20_000,
-        "required_fact_ids": {"fact_required"},
-    }
-
-    first = ContextCompiler().compile(**inputs)
-    fresh_session = ContextCompiler().compile(**inputs)
+    first = ContextCompiler().compile(
+        project_id="project_1",
+        scope=next_scope,
+        memory=memory,
+        source_units=[unit],
+        purpose="manga_composition",
+        constraints=constraints(),
+        max_input_tokens=20_000,
+        required_fact_ids={"fact_required"},
+    )
+    fresh_session = ContextCompiler().compile(
+        project_id="project_1",
+        scope=next_scope,
+        memory=memory,
+        source_units=[unit],
+        purpose="manga_composition",
+        constraints=constraints(),
+        max_input_tokens=20_000,
+        required_fact_ids={"fact_required"},
+    )
 
     assert first.continuity.previous_slice_ending == (
         "Mara hears three knocks from inside the sealed lens room."
@@ -276,6 +284,23 @@ def seeded_memory_repository() -> tuple[InMemoryRepositories, SourceUnitDoc]:
         updated_at=NOW,
     )
     repository.memory_snapshots[("project_1", 0)] = memory_snapshot(unit)
+    repository.artifacts["artifact_delta"] = construct_document(
+        ArtifactDoc,
+        artifact_id="artifact_delta",
+        project_id="project_1",
+        run_id="run_1",
+        kind="manga_plan",
+        schema_version="manga-plan.v1",
+        content={"accepted": True},
+        storage_ref=None,
+        content_hash="d" * 64,
+        parent_artifact_ids=[],
+        source_refs=[],
+        model_receipt=None,
+        validation_status="accepted",
+        validation_report={"passed": True, "issues": [], "validator_version": "test.v1"},
+        created_at=NOW,
+    )
     return repository, unit
 
 
@@ -329,12 +354,12 @@ def test_memory_merge_rejects_unsupported_fact_sources() -> None:
     delta.new_facts[0].source_refs[0].source_unit_id = "missing_unit"
 
     with pytest.raises(UnsupportedSourceError, match="does not exist"):
-        resolve(MemoryMergeService(repository, repository).merge(delta))
+        resolve(MemoryMergeService(repository, repository, repository).merge(delta))
 
 
 def test_memory_merge_is_deterministic_and_rejects_stale_delta() -> None:
     repository, unit = seeded_memory_repository()
-    service = MemoryMergeService(repository, repository)
+    service = MemoryMergeService(repository, repository, repository)
     delta = delta_for(unit)
 
     merged = resolve(service.merge(delta))

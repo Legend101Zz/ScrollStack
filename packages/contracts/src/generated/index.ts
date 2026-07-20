@@ -13,6 +13,7 @@ export type { AssetRequest } from "./asset_request.v1.js";
 export type { ContextPack } from "./context_pack.v1.js";
 export type { GenerationRun } from "./generation_run.v1.js";
 export type { MangaManifest } from "./manga_manifest.v1.js";
+export type { MangaPlan } from "./manga_plan.v1.js";
 export type { MemoryDelta } from "./memory_delta.v1.js";
 export type { ModelReceipt } from "./model_receipt.v1.js";
 export type { ReelSpec } from "./reel_spec.v1.js";

@@ -20,6 +20,7 @@ const contracts = [
   ["context_pack.v1", "ContextPack"],
   ["generation_run.v1", "GenerationRun"],
   ["manga_manifest.v1", "MangaManifest"],
+  ["manga_plan.v1", "MangaPlan"],
   ["memory_delta.v1", "MemoryDelta"],
   ["model_receipt.v1", "ModelReceipt"],
   ["reel_spec.v1", "ReelSpec"],

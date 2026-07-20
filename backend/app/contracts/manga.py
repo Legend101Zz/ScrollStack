@@ -7,6 +7,7 @@ from typing import Annotated, Literal
 from pydantic import Field, model_validator
 
 from .base import ContentHash, ContractModel, Identifier, NonEmptyText, ShortText, UnitInterval
+from .context import CharacterStateUpdate, GroundedFact, StoryThreadUpdate, TerminologyUpdate
 from .source import SourceRef
 
 
@@ -31,6 +32,43 @@ class AdaptationBeat(ContractModel):
     must_preserve: list[NonEmptyText] = Field(min_length=1, max_length=128)
     may_compress: list[NonEmptyText] = Field(default_factory=list, max_length=128)
     confidence: UnitInterval
+
+
+class MangaPlan(ContractModel):
+    schema_version: Literal["manga-plan.v1"]
+    plan_id: Identifier
+    project_id: Identifier
+    scope_id: Identifier
+    context_pack_id: Identifier
+    memory_version: Annotated[int, Field(ge=0)]
+    title: ShortText
+    summary: NonEmptyText
+    target_page_count: Annotated[int, Field(ge=1, le=100)]
+    beats: list[AdaptationBeat] = Field(min_length=1, max_length=1_000)
+    character_state_updates: list[CharacterStateUpdate] = Field(default_factory=list, max_length=256)
+    terminology_updates: list[TerminologyUpdate] = Field(default_factory=list, max_length=256)
+    new_facts: list[GroundedFact] = Field(default_factory=list, max_length=1_000)
+    ending_state: NonEmptyText
+    unresolved_thread_updates: list[StoryThreadUpdate] = Field(default_factory=list, max_length=256)
+
+    @model_validator(mode="after")
+    def validate_plan(self) -> "MangaPlan":
+        beat_ids = [beat.beat_id for beat in self.beats]
+        if len(beat_ids) != len(set(beat_ids)):
+            raise ValueError("beat ids must be unique")
+        if [beat.sequence for beat in self.beats] != list(range(len(self.beats))):
+            raise ValueError("beat sequence values must be contiguous from zero")
+        if len(self.character_state_updates) != len(
+            {item.character_id for item in self.character_state_updates}
+        ):
+            raise ValueError("character state updates must be unique by character_id")
+        if len(self.terminology_updates) != len(
+            {item.canonical_form for item in self.terminology_updates}
+        ):
+            raise ValueError("terminology updates must be unique by canonical_form")
+        if len(self.new_facts) != len({item.fact_id for item in self.new_facts}):
+            raise ValueError("new facts must be unique by fact_id")
+        return self
 
 
 class DialogueLine(ContractModel):

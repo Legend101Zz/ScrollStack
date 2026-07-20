@@ -215,4 +215,51 @@ describe("agent worker", () => {
     expect(second.json().error.code).toBe("WORKER_CAPACITY_EXCEEDED");
     release?.();
   });
+
+  it("allows a bounded retry after failure but reuses a succeeded run", async () => {
+    let attempts = 0;
+    const runtime = new FakeRuntime(async () => {
+      attempts += 1;
+      if (attempts === 1) throw new Error("transient provider failure");
+      return {
+        session_ref: { session_id: "session-retry" },
+        candidate: { plan_id: "plan-retry" },
+        trace: {
+          session_id: "session-retry",
+          goal_type: "MANGA_DIRECTION",
+          skill_name: "manga-direction",
+          skill_version: "1.0.0",
+          skill_hash: "hash",
+          tool_calls: [],
+          tokens: { input: 1, output: 1, cache_read: 0, cache_write: 0, total: 2 },
+          cost_usd: 0,
+          compaction_count: 0,
+        },
+      };
+    });
+    const instance = app(runtime);
+    const first = await instance.inject({
+      method: "POST",
+      url: "/internal/v1/agent-runs",
+      headers: { authorization: `Bearer ${token}` },
+      payload: { goal, context },
+    });
+    const retry = await instance.inject({
+      method: "POST",
+      url: "/internal/v1/agent-runs",
+      headers: { authorization: `Bearer ${token}` },
+      payload: { goal: { ...goal, goal_id: "goal-retry" }, context },
+    });
+    const repeatedSuccess = await instance.inject({
+      method: "POST",
+      url: "/internal/v1/agent-runs",
+      headers: { authorization: `Bearer ${token}` },
+      payload: { goal: { ...goal, goal_id: "goal-repeated" }, context },
+    });
+
+    expect(first.statusCode).toBe(422);
+    expect(retry.statusCode).toBe(200);
+    expect(repeatedSuccess.statusCode).toBe(200);
+    expect(attempts).toBe(2);
+  });
 });

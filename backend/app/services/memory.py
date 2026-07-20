@@ -8,7 +8,11 @@ from typing import Any
 from app.contracts.context import MemoryDelta
 from app.contracts.source import SourceRef
 from app.persistence.documents import ProjectMemorySnapshotDoc, construct_document
-from app.persistence.protocols import MemoryRepository, SourceUnitRepository
+from app.persistence.protocols import (
+    ArtifactRepository,
+    MemoryRepository,
+    SourceUnitRepository,
+)
 
 from .errors import (
     MemoryConflictError,
@@ -24,9 +28,11 @@ class MemoryMergeService:
         self,
         memory: MemoryRepository,
         sources: SourceUnitRepository,
+        artifacts: ArtifactRepository,
     ) -> None:
         self._memory = memory
         self._sources = sources
+        self._artifacts = artifacts
 
     async def merge(self, delta: MemoryDelta) -> ProjectMemorySnapshotDoc:
         project = await self._memory.get_project(delta.project_id)
@@ -46,6 +52,7 @@ class MemoryMergeService:
             )
 
         await self._validate_sources(project.book_id, delta)
+        await self._validate_artifacts(delta)
         state = self._apply(current, delta)
         snapshot_payload = {
             "project_id": current.project_id,
@@ -77,6 +84,8 @@ class MemoryMergeService:
             refs.extend(correction.source_refs)
         for character_update in delta.character_state_updates:
             refs.extend(character_update.source_refs)
+        for terminology_update in delta.terminology_updates:
+            refs.extend(terminology_update.source_refs)
         for continuity_update in delta.continuity_updates:
             refs.extend(continuity_update.source_refs)
         for thread_update in delta.unresolved_thread_updates:
@@ -105,6 +114,18 @@ class MemoryMergeService:
             if await self._sources.get_source_unit(book_id, addition.source_unit_id) is None:
                 raise UnsupportedSourceError(
                     f"Coverage cites unknown source unit {addition.source_unit_id}"
+                )
+
+    async def _validate_artifacts(self, delta: MemoryDelta) -> None:
+        for artifact_id in delta.source_artifact_ids:
+            artifact = await self._artifacts.get_artifact(artifact_id)
+            if (
+                artifact is None
+                or artifact.project_id != delta.project_id
+                or artifact.validation_status != "accepted"
+            ):
+                raise UnsupportedSourceError(
+                    f"Memory delta cites unaccepted artifact {artifact_id}"
                 )
 
     @staticmethod
@@ -168,8 +189,23 @@ class MemoryMergeService:
                 "coverage_status": addition.coverage_status,
             }
 
+        book_spine = deepcopy(current.book_spine)
+        terminology = {
+            item["canonical_form"]: deepcopy(item)
+            for item in book_spine.get("terminology", [])
+        }
+        for update in sorted(
+            delta.terminology_updates, key=lambda item: item.canonical_form
+        ):
+            terminology[update.canonical_form] = {
+                "term": update.term,
+                "canonical_form": update.canonical_form,
+                "meaning": update.meaning,
+            }
+        book_spine["terminology"] = [terminology[key] for key in sorted(terminology)]
+
         return {
-            "book_spine": deepcopy(current.book_spine),
+            "book_spine": book_spine,
             "facts": [facts[key] for key in sorted(facts)],
             "character_state": [character_state[key] for key in sorted(character_state)],
             "world_state": deepcopy(current.world_state),

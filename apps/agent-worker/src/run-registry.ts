@@ -62,7 +62,7 @@ export class RunRegistry {
     correlationId: string;
   }): LiveRun {
     const existing = this.runs.get(input.goal.run_id);
-    if (existing) return existing;
+    if (existing?.state === "RUNNING" || existing?.state === "SUCCEEDED") return existing;
     if (this.activeRuns >= this.options.maxConcurrentRuns) {
       throw new CapacityError(this.options.maxConcurrentRuns);
     }

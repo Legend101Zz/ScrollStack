@@ -6,6 +6,7 @@ export {
   isArtifactRef,
   isContextPack,
   isMangaManifest,
+  isMangaPlan,
   isReelSpec,
   isRenderedPage,
   validateContract,

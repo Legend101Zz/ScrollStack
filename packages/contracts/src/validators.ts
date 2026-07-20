@@ -11,6 +11,7 @@ import type {
   ArtifactRef,
   ContextPack,
   MangaManifest,
+  MangaPlan,
   ReelSpec,
   RenderedPage,
 } from "./generated/index.js";
@@ -64,6 +65,9 @@ export const isContextPack = (value: unknown): value is ContextPack =>
 
 export const isMangaManifest = (value: unknown): value is MangaManifest =>
   validateContract("manga_manifest.v1", value).valid;
+
+export const isMangaPlan = (value: unknown): value is MangaPlan =>
+  validateContract("manga_plan.v1", value).valid;
 
 export const isReelSpec = (value: unknown): value is ReelSpec =>
   validateContract("reel_spec.v1", value).valid;

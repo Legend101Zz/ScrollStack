@@ -9,6 +9,7 @@ from pymongo.errors import DuplicateKeyError
 
 from .documents import (
     ArtifactDoc,
+    BookDoc,
     GenerationRunDoc,
     MangaProjectDoc,
     ProjectMemorySnapshotDoc,
@@ -29,6 +30,7 @@ class InMemoryRepositories:
     """A deterministic adapter for unit tests and local contract exploration."""
 
     def __init__(self) -> None:
+        self.books: dict[str, BookDoc] = {}
         self.source_units: dict[tuple[str, str], SourceUnitDoc] = {}
         self.scopes: dict[str, ScopeManifestDoc] = {}
         self.projects: dict[str, MangaProjectDoc] = {}
@@ -37,6 +39,37 @@ class InMemoryRepositories:
         self.runs: dict[str, GenerationRunDoc] = {}
         self.stages: dict[str, StageRunDoc] = {}
         self._lock = asyncio.Lock()
+
+    async def create_book_if_absent(self, book: BookDoc) -> tuple[BookDoc, bool]:
+        async with self._lock:
+            existing = next(
+                (
+                    item
+                    for item in self.books.values()
+                    if item.owner_id == book.owner_id and item.pdf_hash == book.pdf_hash
+                ),
+                None,
+            )
+            if existing is not None:
+                return _copy_document(existing), False
+            self.books[book.book_id] = _copy_document(book)
+            return _copy_document(book), True
+
+    async def get_book(self, book_id: str) -> BookDoc | None:
+        book = self.books.get(book_id)
+        return _copy_document(book) if book else None
+
+    async def list_books(self, owner_id: str | None = None) -> list[BookDoc]:
+        books = [
+            item.model_copy(deep=True)
+            for item in self.books.values()
+            if owner_id is None or item.owner_id == owner_id
+        ]
+        return sorted(books, key=lambda item: (item.created_at, item.book_id), reverse=True)
+
+    async def save_book(self, book: BookDoc) -> BookDoc:
+        self.books[book.book_id] = _copy_document(book)
+        return _copy_document(book)
 
     async def save_source_units(self, units: list[SourceUnitDoc]) -> None:
         for unit in units:
@@ -90,6 +123,16 @@ class InMemoryRepositories:
         self.projects[project.project_id] = _copy_document(project)
         return _copy_document(project)
 
+    async def save_memory_snapshot(
+        self, snapshot: ProjectMemorySnapshotDoc
+    ) -> ProjectMemorySnapshotDoc:
+        key = (snapshot.project_id, snapshot.memory_version)
+        existing = self.memory_snapshots.get(key)
+        if existing is not None and existing.content_hash != snapshot.content_hash:
+            raise ValueError("memory snapshot identity already has different content")
+        self.memory_snapshots[key] = _copy_document(snapshot)
+        return _copy_document(snapshot)
+
     async def get_memory_snapshot(
         self, project_id: str, memory_version: int
     ) -> ProjectMemorySnapshotDoc | None:
@@ -114,6 +157,20 @@ class InMemoryRepositories:
             project.updated_at = utc_now()
             self.projects[project_id] = project
             return True
+
+    async def save_artifact(self, artifact: ArtifactDoc) -> ArtifactDoc:
+        async with self._lock:
+            existing = self.artifacts.get(artifact.artifact_id)
+            if existing is not None:
+                if existing.content_hash != artifact.content_hash:
+                    raise ValueError("artifact identity already has different content")
+                return _copy_document(existing)
+            self.artifacts[artifact.artifact_id] = _copy_document(artifact)
+            return _copy_document(artifact)
+
+    async def get_artifact(self, artifact_id: str) -> ArtifactDoc | None:
+        artifact = self.artifacts.get(artifact_id)
+        return _copy_document(artifact) if artifact else None
 
     async def list_artifacts(self, run_id: str, *, accepted_only: bool) -> list[ArtifactDoc]:
         artifacts = [
@@ -156,6 +213,10 @@ class InMemoryRepositories:
             key=lambda stage: (stage.stage_name, stage.attempt, stage.stage_run_id),
         )
 
+    async def get_stage(self, stage_run_id: str) -> StageRunDoc | None:
+        stage = self.stages.get(stage_run_id)
+        return _copy_document(stage) if stage else None
+
     async def save_stage(self, stage: StageRunDoc) -> StageRunDoc:
         self.stages[stage.stage_run_id] = _copy_document(stage)
         return _copy_document(stage)
@@ -163,6 +224,34 @@ class InMemoryRepositories:
 
 class BeanieRepositories:
     """Mongo-backed implementation used after ``initialize_mongo``."""
+
+    async def create_book_if_absent(self, book: BookDoc) -> tuple[BookDoc, bool]:
+        try:
+            return cast(BookDoc, await book.insert()), True
+        except DuplicateKeyError:
+            existing = await BookDoc.find_one(
+                BookDoc.owner_id == book.owner_id,
+                BookDoc.pdf_hash == book.pdf_hash,
+            )
+            if existing is None:
+                raise
+            return existing, False
+
+    async def get_book(self, book_id: str) -> BookDoc | None:
+        return await BookDoc.find_one(BookDoc.book_id == book_id)
+
+    async def list_books(self, owner_id: str | None = None) -> list[BookDoc]:
+        query: dict[str, object] = {}
+        if owner_id is not None:
+            query["owner_id"] = owner_id
+        return await BookDoc.find(query).sort(-BookDoc.created_at).to_list()
+
+    async def save_book(self, book: BookDoc) -> BookDoc:
+        existing = await self.get_book(book.book_id)
+        if existing is None:
+            return cast(BookDoc, await book.insert())
+        book.id = existing.id
+        return cast(BookDoc, await book.replace())
 
     async def save_source_units(self, units: list[SourceUnitDoc]) -> None:
         for unit in units:
@@ -218,6 +307,19 @@ class BeanieRepositories:
         project.id = existing.id
         return cast(MangaProjectDoc, await project.replace())
 
+    async def save_memory_snapshot(
+        self, snapshot: ProjectMemorySnapshotDoc
+    ) -> ProjectMemorySnapshotDoc:
+        try:
+            return cast(ProjectMemorySnapshotDoc, await snapshot.insert())
+        except DuplicateKeyError:
+            existing = await self.get_memory_snapshot(
+                snapshot.project_id, snapshot.memory_version
+            )
+            if existing is None or existing.content_hash != snapshot.content_hash:
+                raise
+            return existing
+
     async def get_memory_snapshot(
         self, project_id: str, memory_version: int
     ) -> ProjectMemorySnapshotDoc | None:
@@ -250,6 +352,18 @@ class BeanieRepositories:
             }
         )
         return bool(result.modified_count)
+
+    async def save_artifact(self, artifact: ArtifactDoc) -> ArtifactDoc:
+        try:
+            return cast(ArtifactDoc, await artifact.insert())
+        except DuplicateKeyError:
+            existing = await self.get_artifact(artifact.artifact_id)
+            if existing is None or existing.content_hash != artifact.content_hash:
+                raise
+            return existing
+
+    async def get_artifact(self, artifact_id: str) -> ArtifactDoc | None:
+        return await ArtifactDoc.find_one(ArtifactDoc.artifact_id == artifact_id)
 
     async def list_artifacts(self, run_id: str, *, accepted_only: bool) -> list[ArtifactDoc]:
         query: dict[str, object] = {"run_id": run_id}
@@ -284,6 +398,9 @@ class BeanieRepositories:
             .sort(+StageRunDoc.stage_name, +StageRunDoc.attempt)
             .to_list()
         )
+
+    async def get_stage(self, stage_run_id: str) -> StageRunDoc | None:
+        return await StageRunDoc.find_one(StageRunDoc.stage_run_id == stage_run_id)
 
     async def save_stage(self, stage: StageRunDoc) -> StageRunDoc:
         existing = await StageRunDoc.find_one(StageRunDoc.stage_run_id == stage.stage_run_id)
