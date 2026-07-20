@@ -11,8 +11,13 @@ import type {
   ArtifactRef,
   ContextPack,
   MangaManifest,
+  MangaPlan,
+  ReelPlayerPayload,
+  ReelSeries,
   ReelSpec,
   RenderedPage,
+  SeriesProgress,
+  SeriesProgressUpdate,
 } from "./generated/index.js";
 import { contractSchemas, type ContractName } from "./schemas.js";
 
@@ -65,8 +70,23 @@ export const isContextPack = (value: unknown): value is ContextPack =>
 export const isMangaManifest = (value: unknown): value is MangaManifest =>
   validateContract("manga_manifest.v1", value).valid;
 
+export const isMangaPlan = (value: unknown): value is MangaPlan =>
+  validateContract("manga_plan.v1", value).valid;
+
 export const isReelSpec = (value: unknown): value is ReelSpec =>
   validateContract("reel_spec.v1", value).valid;
 
+export const isReelPlayerPayload = (value: unknown): value is ReelPlayerPayload =>
+  validateContract("reel_player_payload.v1", value).valid;
+
+export const isReelSeries = (value: unknown): value is ReelSeries =>
+  validateContract("reel_series.v1", value).valid;
+
 export const isRenderedPage = (value: unknown): value is RenderedPage =>
   validateContract("rendered_page.v1", value).valid;
+
+export const isSeriesProgress = (value: unknown): value is SeriesProgress =>
+  validateContract("series_progress.v1", value).valid;
+
+export const isSeriesProgressUpdate = (value: unknown): value is SeriesProgressUpdate =>
+  validateContract("series_progress_update.v1", value).valid;

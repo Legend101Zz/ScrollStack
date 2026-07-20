@@ -70,6 +70,39 @@ class SourceUnitDoc(Document):
         ]
 
 
+class BookDoc(Document):
+    book_id: str
+    owner_id: str
+    title: str
+    author: str | None = None
+    original_filename: str
+    pdf_hash: str
+    pdf_storage_ref: str
+    status: str = "pending"
+    total_pages: int = 0
+    parse_version: str | None = None
+    error_code: str | None = None
+    error_detail: str | None = None
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
+
+    class Settings:
+        name = "books"
+        indexes = [
+            IndexModel([("book_id", ASCENDING)], unique=True, name="uq_book_id"),
+            IndexModel(
+                [("owner_id", ASCENDING), ("pdf_hash", ASCENDING)],
+                unique=True,
+                name="uq_book_owner_pdf_hash",
+            ),
+            IndexModel(
+                [("owner_id", ASCENDING), ("created_at", DESCENDING)],
+                name="ix_book_owner_created",
+            ),
+            IndexModel([("status", ASCENDING)], name="ix_book_status"),
+        ]
+
+
 class ScopeManifestDoc(Document):
     project_id: str
     book_id: str
@@ -175,6 +208,33 @@ class ArtifactDoc(Document):
                 [("project_id", ASCENDING), ("kind", ASCENDING), ("created_at", DESCENDING)],
                 name="ix_artifact_project_kind_created",
             ),
+            IndexModel(
+                [
+                    ("project_id", ASCENDING),
+                    ("kind", ASCENDING),
+                    ("validation_status", ASCENDING),
+                    ("content.series_id", ASCENDING),
+                    ("content.sequence", ASCENDING),
+                ],
+                name="ix_artifact_reel_project_catalog",
+            ),
+            IndexModel(
+                [
+                    ("kind", ASCENDING),
+                    ("validation_status", ASCENDING),
+                    ("content.series_id", ASCENDING),
+                    ("content.sequence", ASCENDING),
+                ],
+                name="ix_artifact_reel_series_sequence",
+            ),
+            IndexModel(
+                [
+                    ("kind", ASCENDING),
+                    ("validation_status", ASCENDING),
+                    ("content.reel_id", ASCENDING),
+                ],
+                name="ix_artifact_reel_id",
+            ),
             IndexModel([("content_hash", ASCENDING)], name="ix_artifact_content_hash"),
         ]
 
@@ -185,6 +245,7 @@ class GenerationRunDoc(Document):
     scope_id: str
     requested_outputs: list[str]
     pipeline_version: str
+    memory_version: int
     status: str
     active_stage: str | None = None
     budget: dict[str, Any]
@@ -256,6 +317,7 @@ class SeriesProgressDoc(Document):
 
 
 DOCUMENT_MODELS: tuple[type[Document], ...] = (
+    BookDoc,
     SourceUnitDoc,
     ScopeManifestDoc,
     MangaProjectDoc,

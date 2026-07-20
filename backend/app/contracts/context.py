@@ -67,6 +67,10 @@ class TerminologyEntry(ContractModel):
     meaning: NonEmptyText
 
 
+class TerminologyUpdate(TerminologyEntry):
+    source_refs: list[SourceRef] = Field(min_length=1, max_length=128)
+
+
 class BookCanonView(ContractModel):
     synopsis: NonEmptyText
     themes: list[ShortText] = Field(default_factory=list, max_length=64)
@@ -169,6 +173,7 @@ class MemoryDelta(ContractModel):
     new_facts: list[GroundedFact] = Field(default_factory=list, max_length=2_000)
     fact_corrections: list[FactCorrection] = Field(default_factory=list, max_length=1_000)
     character_state_updates: list[CharacterStateUpdate] = Field(default_factory=list, max_length=1_000)
+    terminology_updates: list[TerminologyUpdate] = Field(default_factory=list, max_length=512)
     continuity_updates: list[ContinuityUpdate] = Field(default_factory=list, max_length=1_000)
     coverage_additions: list[SourceCoverage] = Field(default_factory=list, max_length=1_000)
     unresolved_thread_updates: list[StoryThreadUpdate] = Field(default_factory=list, max_length=1_000)

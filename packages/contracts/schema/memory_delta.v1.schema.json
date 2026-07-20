@@ -317,6 +317,46 @@
       ],
       "title": "StoryThreadUpdate",
       "type": "object"
+    },
+    "TerminologyUpdate": {
+      "additionalProperties": false,
+      "properties": {
+        "canonical_form": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Canonical Form",
+          "type": "string"
+        },
+        "meaning": {
+          "maxLength": 20000,
+          "minLength": 1,
+          "title": "Meaning",
+          "type": "string"
+        },
+        "source_refs": {
+          "items": {
+            "$ref": "#/$defs/SourceRef"
+          },
+          "maxItems": 128,
+          "minItems": 1,
+          "title": "Source Refs",
+          "type": "array"
+        },
+        "term": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Term",
+          "type": "string"
+        }
+      },
+      "required": [
+        "term",
+        "canonical_form",
+        "meaning",
+        "source_refs"
+      ],
+      "title": "TerminologyUpdate",
+      "type": "object"
     }
   },
   "$id": "https://scrollstack.dev/contracts/memory_delta.v1.schema.json",
@@ -390,6 +430,14 @@
       "maxItems": 1000,
       "minItems": 1,
       "title": "Source Artifact Ids",
+      "type": "array"
+    },
+    "terminology_updates": {
+      "items": {
+        "$ref": "#/$defs/TerminologyUpdate"
+      },
+      "maxItems": 512,
+      "title": "Terminology Updates",
       "type": "array"
     },
     "unresolved_thread_updates": {
