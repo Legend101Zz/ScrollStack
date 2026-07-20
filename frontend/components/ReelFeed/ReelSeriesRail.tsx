@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReelFeedSeries } from "./fixture-adapter";
+import type { ReelFeedSeries } from "./types";
 
 export function ReelSeriesRail({
   reelIndex,

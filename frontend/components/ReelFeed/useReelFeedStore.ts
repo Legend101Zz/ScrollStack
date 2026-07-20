@@ -9,6 +9,7 @@ type ReelFeedState = {
   playing: boolean;
   reelIndex: number;
   seriesIndex: number;
+  hydrate: (seriesIndex: number, reelIndex: number) => void;
   moveHorizontal: (direction: -1 | 1, reelCount: number) => void;
   moveVertical: (direction: -1 | 1, reelCounts: readonly number[]) => void;
   reset: () => void;
@@ -30,6 +31,12 @@ const initialState = {
 
 export const useReelFeedStore = create<ReelFeedState>((set) => ({
   ...initialState,
+  hydrate: (seriesIndex, reelIndex) =>
+    set({
+      ...initialState,
+      reelIndex,
+      seriesIndex,
+    }),
   moveHorizontal: (direction, reelCount) =>
     set((state) => ({
       reelIndex: Math.min(Math.max(state.reelIndex + direction, 0), Math.max(reelCount - 1, 0)),

@@ -1,31 +1,16 @@
 import { isMangaManifest, isReelSpec, type MangaManifest, type ReelSpec } from "@scrollstack/contracts";
 import type {
   CaptionCue,
-  ReelCompilationInput,
   ResolvedReelAsset,
 } from "@scrollstack/reel-components";
 
 import mangaManifestJson from "../../../packages/fixtures/canonical/manga_manifest.v1.json";
 import reelSpecJson from "../../../packages/fixtures/canonical/reel_spec.v1.json";
+import type { ReelFeedCatalog, ReelFeedItem, ReelFeedReel } from "./types";
 
-export type ReelFeedItem = Readonly<{
-  composition: ReelCompilationInput;
-  id: string;
-  label: string;
-}>;
-
-export type ReelFeedSeries = Readonly<{
-  id: string;
-  label: string;
-  reels: readonly ReelFeedItem[];
-}>;
-
-export type ReelFeedPayload = Readonly<{
-  bookId: string;
-  projectId: string;
-  sourceLabel: string;
-  title: string;
-  series: readonly ReelFeedSeries[];
+export type ReelFeedFixture = Readonly<{
+  catalog: ReelFeedCatalog;
+  items: Readonly<Record<string, ReelFeedItem>>;
 }>;
 
 const CANONICAL_IMAGE_HASH = "e2c72c57e72d048781a2fb626b503183017ef35ed0ee118bc9b9ffbc9813d4ef";
@@ -85,6 +70,10 @@ function fixtureReel(
   return {
     id: spec.reel_id,
     label,
+    durationFrames: spec.format.duration_frames,
+    reelSpecArtifactId: `fixture_${spec.reel_id}`,
+    sequence,
+    seriesId,
     composition: {
       assets: fixtureAssets(),
       captions: fixtureCaptions(spec),
@@ -94,8 +83,18 @@ function fixtureReel(
   };
 }
 
-/** Fixture-only server adapter. Replace this function with the API boundary after ReelPlayerPayload lands. */
-export function loadFixtureReelFeed(bookId: string, projectId: string): ReelFeedPayload {
+function fixtureCatalogItem(item: ReelFeedItem): ReelFeedReel {
+  return {
+    durationFrames: item.durationFrames,
+    id: item.id,
+    label: item.label,
+    reelSpecArtifactId: item.reelSpecArtifactId,
+    sequence: item.sequence,
+  };
+}
+
+/** Explicit development-only data. Production callers use the reel API boundary. */
+export function loadFixtureReelFeed(bookId: string, projectId: string): ReelFeedFixture {
   const { manga, spec } = canonicalContracts();
   const routes = [
     fixtureReel(spec, manga, "series_last_observatory", 0, "The map remembers"),
@@ -106,14 +105,32 @@ export function loadFixtureReelFeed(bookId: string, projectId: string): ReelFeed
     fixtureReel(spec, manga, "series_old_warnings", 1, "The vanished crew"),
   ];
 
+  const items = [...routes, ...warnings];
   return {
-    bookId,
-    projectId,
-    sourceLabel: "Manga slice · Source pages 1–10",
-    title: "The Last Observatory",
-    series: [
-      { id: "series_last_observatory", label: "The hidden routes", reels: routes },
-      { id: "series_old_warnings", label: "What the map kept", reels: warnings },
-    ],
+    catalog: {
+      bookId,
+      projectId,
+      sourceLabel: "Manga slice · Source pages 1–10",
+      title: "The Last Observatory",
+      series: [
+        {
+          bookId,
+          id: "series_last_observatory",
+          label: "The hidden routes",
+          mangaManifestArtifactId: "fixture_manifest_last_observatory",
+          projectId,
+          reels: routes.map(fixtureCatalogItem),
+        },
+        {
+          bookId,
+          id: "series_old_warnings",
+          label: "What the map kept",
+          mangaManifestArtifactId: "fixture_manifest_old_warnings",
+          projectId,
+          reels: warnings.map(fixtureCatalogItem),
+        },
+      ],
+    },
+    items: Object.fromEntries(items.map((item) => [item.id, item])),
   };
 }

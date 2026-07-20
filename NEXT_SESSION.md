@@ -19,6 +19,42 @@
 Create or refresh feature worktrees from `dev` before starting lane work. Do not
 share uncommitted files between them.
 
+## Reel API consumer — 2026-07-20 — Utkarsh — `codex/reel-api-consumer`
+
+- **Completed:** Replaced the live fixture path with generated-contract-validated
+  reel discovery, player-payload, and per-series progress clients. Browser calls
+  now stay same-origin through reel-owned Next route handlers. The feed restores
+  the newest valid position, fetches and deduplicates only the current reel plus
+  the likely horizontal and vertical destinations, preloads their media, and
+  serializes full-replacement progress writes with optimistic viewed-ID unions
+  and an explicit retry state. Fixtures are available only through
+  `?fixture=1` in development; API failures never silently select demo data.
+- **Owned files changed:** `frontend/app/**/reels/`,
+  `frontend/components/ReelFeed/`, and reel consumer tests under
+  `packages/reel-components/src/`; this handoff is the only shared document
+  changed.
+- **Contract version / impact:** consumes `reel-series.v1`,
+  `reel-player-payload.v1`, `series-progress.v1`, and
+  `series-progress-update.v1` unchanged. Breaking impact: none.
+- **Validation:** frontend lint, typecheck, and production build pass;
+  reel-components typecheck passes; all 21 reel-component/consumer tests pass;
+  `git diff --check` passes. Manual Chromium checks covered 390x844 and
+  1440x1000 fixture playback plus the real-mode API failure/retry screen.
+- **Visual evidence:** current captures were checked at
+  `/tmp/scrollstack-reel-api-mobile.png`,
+  `/tmp/scrollstack-reel-api-desktop.png`, and
+  `/tmp/scrollstack-reel-api-error.png`; the committed visual baseline remains
+  `docs/evidence/dev-reel-player-mobile-2026-07-20.png` and
+  `docs/evidence/dev-reel-player-desktop-2026-07-20.png`.
+- **Current blocker:** Mrigesh's manga workflow still does not emit accepted
+  manifest/reel artifacts, so production discovery is honestly empty until
+  that lane lands. Container deployments should set `INTERNAL_API_URL` to the
+  backend service URL; changing shared Compose/env defaults remains a
+  coordinated core-lane edit.
+- **Next action / owner:** Utkarsh opens this focused PR into `dev`. Mrigesh
+  reviews it, connects accepted artifacts, and supplies the container-internal
+  API URL before the next `dev` promotion to `main`.
+
 ## Current dev integration baseline — 2026-07-20 — Utkarsh on behalf of both lanes
 
 - **Completed:**

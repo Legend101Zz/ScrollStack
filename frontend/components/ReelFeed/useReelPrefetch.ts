@@ -3,7 +3,7 @@
 import { preloadAudio, preloadImage } from "@remotion/preload";
 import { useEffect } from "react";
 
-import type { ReelFeedItem } from "./fixture-adapter";
+import type { ReelFeedItem } from "./types";
 
 /** Preloads only the assets for the likely horizontal and vertical destinations. */
 export function useReelPrefetch(items: readonly (ReelFeedItem | undefined)[]): void {
