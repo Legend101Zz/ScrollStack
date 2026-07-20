@@ -15,6 +15,10 @@ def content_hash(value: Any) -> str:
     return hashlib.sha256(canonical_json(value).encode("utf-8")).hexdigest()
 
 
+def binary_content_hash(value: bytes) -> str:
+    return hashlib.sha256(value).hexdigest()
+
+
 def estimate_tokens(value: Any) -> int:
     """Stable conservative estimator used until a provider tokenizer is selected."""
 

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { MangaReader } from "@/components/MangaReader/MangaReader";
+import { ReaderLoadError } from "@/components/ui/AsyncState";
 import { ApiError, loadReaderProject } from "@/lib/api";
 
 export const metadata: Metadata = {
@@ -20,6 +21,16 @@ export default async function MangaReaderPage({
     return <MangaReader project={project} />;
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) notFound();
+    if (error instanceof ApiError) {
+      return (
+        <ReaderLoadError
+          bookId={id}
+          code={error.code}
+          message={error.message}
+          projectId={projectId}
+        />
+      );
+    }
     throw error;
   }
 }

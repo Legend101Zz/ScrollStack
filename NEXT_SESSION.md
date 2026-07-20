@@ -18,84 +18,76 @@
 Create or refresh the worktrees from `main` before starting lane work. Do not
 share uncommitted files between them.
 
-## Current baseline — 2026-07-20 — Mrigesh — `codex/mrigesh-core-vertical-slice`
+## Current baseline — 2026-07-21 — Mrigesh — `codex/mrigesh-core-vertical-slice`
 
 - **Worktree:** `/Volumes/Mrigesh SSD/ScrollStack-manga`
 - **Completed:**
-  - Added bounded, hash-idempotent PDF upload and PyMuPDF page-text ingestion.
-    Raw PDFs are stored outside the web root, filenames cannot select paths,
-    encrypted/malformed/empty/oversized PDFs fail explicitly, and every parsed
-    page becomes an immutable, provenance-rich `SourceUnitDoc`.
-  - Added Mongo-backed `BookDoc`, book/source-unit/page APIs, manga-project
-    creation, and an immutable version-zero project-memory snapshot.
-  - Added accepted-artifact verification to memory merges plus grounded
-    terminology updates. A two-process Mongo proof now rebuilds scope 11-20
-    with scope 1-10's accepted ending, character state, terminology, grounded
-    fact, coverage, and unresolved thread without a shared chat.
-  - Added canonical `MangaPlan` v1 Python/JSON Schema/TypeScript contracts,
-    generated artifacts, Ajv registration, and a cross-language fixture.
-  - Added authenticated, project/run/stage/ContextPack-scoped Manga Director
-    tools for bounded source reads, canon reads, asset metadata, conflict
-    reports, and schema-valid plan submission. `submit_manga_plan` persists a
-    validated candidate before acknowledging it and rejects cross-project or
-    inactive-stage calls.
-  - Replaced the planning-only Celery response with durable context-compilation
-    and Manga Director stage execution. Accepted plans retain candidate lineage,
-    source receipts, agent trace, and `ModelReceipt`. The run then ends with
-    typed `MANGA_PIPELINE_NOT_CONNECTED` failure instead of falsely claiming a
-    completed manga before composition and `RenderedPage` assembly exist.
-  - Fixed Mongo UTC round trips by enabling timezone-aware PyMongo decoding and
-    allowed bounded worker retries after failed runs without replaying a
-    succeeded paid run.
+  - Wired the existing upload, scope, generation, and reader UI to the live
+    backend. Production book/project IDs never fall back to the canonical sample.
+  - Added metadata-only source-unit reads, bounded page previews, real parsing
+    and generation polling, typed failure states, and automatic reader routing
+    only after a succeeded run.
+  - Sealed the Pi Manga Director to the pinned `minimax/MiniMax-M3` registry
+    entry, repository-owned skill, approved five-tool list, exact repair limit,
+    explicit cost/step limits, and `ALLOW_LLM_CODEGEN=false`.
+  - Added OpenRouter image generation through
+    `google/gemini-2.5-flash-image`, immutable hashed media storage, image
+    receipts, deterministic plan-to-page composition, strict RenderedPage
+    validation, accepted reader payloads, and accepted-output-only memory merge.
+  - Completed one real paid Docker-backed run from the required PDF for pages
+    13-15. `run_4064f0e265f9d80d6a307806` succeeded with 10 accepted
+    `rendered-page.v1` artifacts and two real PNG key-panel assets.
+  - MiniMax receipt: 20,204 input tokens, 14,431 output tokens, $0.02365302,
+    89,067 ms, attempt 1. Image receipts total $0.0775215 across two assets.
+  - Persisted ProjectMemory v1, then restarted processes and compiled a second,
+    non-overlapping pages 17-19 ContextPack from memory v1. The second run was
+    intentionally stopped at `AGENT_WORKER_FAILED` with the agent unavailable,
+    proving continuity rebuild without a second paid call.
+  - Explicit backend/Celery restart preserved a byte-identical reader payload
+    (`60983d7621c97f8e56c12c69c5509e8ad9d80da9f56e38750c3dd8b6d1c01bd4`).
 - **Owned files changed:**
-  - `backend/app/` persistence, services, API, worker, and contracts;
-  - `backend/tests/`, `backend/scripts/verify_mongo_continuity.py`, dependency
-    metadata and lockfile;
-  - `apps/agent-worker/` run retry behavior and tests;
-  - `packages/contracts/` generated contract seam and validators;
-  - `packages/fixtures/` canonical MangaPlan fixture;
-  - this handoff and `docs/evidence/mrigesh-core-vertical-slice-2026-07-20.md`.
-- **Contract version / impact:** additive only. Added `manga-plan.v1`; added the
-  optional `terminology_updates` field to `memory-delta.v1`. Existing v1
-  fixtures remain valid; no breaking reader or reel contract change.
+  - `backend/`, `apps/agent-worker/`, `packages/agent-runtime/`, frontend
+    non-reel routes/components/API/state, Compose/start configuration, this
+    handoff, and `docs/evidence/mrigesh-core-golden-path-2026-07-21.md`.
+  - No reel-owned path changed.
+- **Contract version / impact:** additive v1 behavior only. The public reader
+  envelope is `manga-reader.v1`; accepted pages remain `rendered-page.v1`.
+  Existing shared schemas remain at 18 and no reel contract was forked.
 - **Validation:**
-  - Backend: 40 pytest tests passed; Ruff passed; strict mypy passed across 43
-    source files; deterministic export reports 18 current schemas.
-  - Shared contracts: 22 Vitest cases passed; generated JSON Schema and
-    TypeScript artifacts are current.
-  - Agent runtime/worker: 4 runtime and 7 worker Vitest cases passed; both
-    typechecks passed.
-  - Root `pnpm check` passed, including frontend typecheck.
-  - `docker compose --env-file .env.example config --quiet`, `zsh -n start.sh`,
-    `zsh -n stop.sh`, and `git diff --check` passed.
-  - Fresh-process Mongo proof passed. Rebuilt ContextPack:
-    `context_e6f2435ea729e185d5663b23`; hash:
-    `d904c371350d6f06f61866e5c54e9e7a4661768de034dd5c8cd0c61ffc7e4bd4`.
-- **Visual evidence:** none required for this backend/control-plane slice. No
-  entertainment UI or reel-owned path changed.
+  - Backend: 48 pytest tests; Ruff; strict mypy across 46 source files; 18-schema
+    export check.
+  - Contracts: 22 tests. Agent runtime: 8 tests. Agent worker: 12 tests. Root
+    TypeScript/frontend checks and Docker image builds passed.
+  - Mongo, Redis, backend, Celery, agent worker, and frontend ran together;
+    backend and agent worker readiness returned HTTP 200 inside the network.
+  - Real reader endpoint and server-rendered frontend reader route return HTTP
+    200 after restart; the frontend HTML contains the real title and asset URLs
+    and contains no fixture title.
+- **Visual evidence:** the two generated PNG assets were visually inspected and
+  are grounded in pages 13-15. Browser screenshots are still missing for the
+  reason below; raw image inspection is not being misreported as UI acceptance.
 - **Current blockers / honest gaps:**
-  - A live Manga Director provider call was not run: `OPENAI_API_KEY` and
-    `AGENT_MODEL` are unset and no local `.env` was present. Unit/integration
-    tests use a broker-calling fake worker; paid-provider acceptance is still
-    required.
-  - `docker compose build` produced no output for 30 seconds because the Docker
-    daemon remained unresponsive; it was interrupted. Static Compose validation
-    passed, and the Mongo continuity proof used a temporary local `mongod` 8.2.3
-    process that was shut down cleanly.
-  - Manga composition, deterministic validators, accepted `RenderedPage`,
-    `MangaManifest`, and post-manga `MemoryDelta` derivation remain unconnected.
-    The workflow exposes this as a terminal typed gap, not success.
+  - Final browser acceptance is not complete. The in-app Browser reported no
+    available browser, Computer Use failed with `Sky Computer Use native pipe
+    startup failed`, and the enabled Chrome extension/native-host path still
+    returned `Browser is not available: extension` after its approved retry.
+    Therefore the exact PDF has not yet been uploaded through the visible UI,
+    and desktop/mobile screenshots, live RTL/vertical interaction, refresh in a
+    controlled browser, and console inspection remain unaccepted.
+  - Docker Desktop stopped unexpectedly several times during acceptance. Named
+    volumes survived every restart, all images built, all services recovered,
+    and the reader payload remained byte-identical; this is now a stability
+    observation, not the former unverified-build blocker.
   - Public user identity is still hackathon single-user input. Production OIDC
     ownership enforcement and upload parser process/container isolation remain.
 - **Next action / owner:**
-  1. Mrigesh/operator configures an approved `AGENT_MODEL` and provider key,
-     starts Mongo, Redis, backend, Celery, and the agent profile, then retains
-     one real broker-validated MangaPlan plus trace/receipt evidence.
-  2. Mrigesh ports the smallest existing Python manga composition/validation
-     path behind the accepted plan and emits `RenderedPage`; only then replace
-     `MANGA_PIPELINE_NOT_CONNECTED` and merge the accepted continuity delta.
-  3. After that backend slice repeats, wire the typed frontend golden path and
-     capture the required desktop/mobile/RTL/vertical/error evidence.
+  1. Repair/reinstall the ChatGPT browser-control plugin outside this repo, then
+     run the visible `/books/new` upload flow with the required PDF. Do not start
+     another paid run unless its scope/input identity is intentionally new.
+  2. Capture desktop/mobile reader screenshots, exercise RTL and vertical modes,
+     refresh, and inspect browser console/server logs. Use the already persisted
+     reader URL when validating the accepted run.
+  3. Keep the ignored `.env` secret values local. Never commit or print them.
 
 ## Previous baseline — 2026-07-19 — Mrigesh — `codex/manga-context-control-plane`
 

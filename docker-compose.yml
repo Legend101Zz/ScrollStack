@@ -44,6 +44,11 @@ services:
       ALLOW_LLM_CODEGEN: "false"
     ports:
       - "8000:8000"
+    healthcheck:
+      test: ["CMD", "uv", "run", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/readyz', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
     volumes:
       - media_data:/data/media
     depends_on:
@@ -64,6 +69,8 @@ services:
       AGENT_WORKER_URL: ${AGENT_WORKER_URL:-http://agent_worker:8788}
       AGENT_WORKER_TOKEN: ${AGENT_WORKER_TOKEN:-replace-with-a-long-random-token}
       AGENTIC_MANGA_PIPELINE_V1: ${AGENTIC_MANGA_PIPELINE_V1:-false}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      IMAGE_MODEL: ${IMAGE_MODEL:-google/gemini-2.5-flash-image}
       ALLOW_LLM_CODEGEN: "false"
     volumes:
       - media_data:/data/media
@@ -81,21 +88,27 @@ services:
     restart: unless-stopped
     environment:
       AGENT_WORKER_TOKEN: ${AGENT_WORKER_TOKEN:-replace-with-a-long-random-token}
-      AGENT_PROVIDER: ${AGENT_PROVIDER:-openai}
-      AGENT_MODEL: ${AGENT_MODEL:-}
-      AGENT_MODEL_API_KEY_ENV: ${AGENT_MODEL_API_KEY_ENV:-OPENAI_API_KEY}
+      AGENT_PROVIDER: ${AGENT_PROVIDER:-minimax}
+      AGENT_MODEL: ${AGENT_MODEL:-MiniMax-M3}
+      AGENT_MODEL_API_KEY_ENV: ${AGENT_MODEL_API_KEY_ENV:-MINIMAX_API_KEY}
       AGENT_MAX_CONCURRENCY: ${AGENT_MAX_CONCURRENCY:-2}
       AGENT_SESSION_DIR: /data/agent-sessions
       DOMAIN_TOOL_BROKER_URL: ${DOMAIN_TOOL_BROKER_URL:-http://backend:8000}
       DOMAIN_TOOL_BROKER_TOKEN: ${DOMAIN_TOOL_BROKER_TOKEN:-replace-with-a-third-long-random-token}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       MINIMAX_API_KEY: ${MINIMAX_API_KEY:-}
       ALLOW_LLM_CODEGEN: "false"
     volumes:
       - agent_sessions:/data/agent-sessions
     depends_on:
+      backend:
+        condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8788/readyz').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
 
   reel_render_worker:
     profiles: ["reels"]
@@ -118,11 +131,12 @@ services:
     restart: unless-stopped
     environment:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+      INTERNAL_API_URL: ${INTERNAL_API_URL:-http://backend:8000}
     ports:
       - "3000:3000"
     depends_on:
       backend:
-        condition: service_started
+        condition: service_healthy
 
 volumes:
   agent_sessions:

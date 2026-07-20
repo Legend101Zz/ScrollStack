@@ -5,9 +5,12 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
+from pydantic import ValidationError
+
+from app.contracts.artifacts import AssetRef
 from app.contracts.context import MemoryDelta
 from app.contracts.source import SourceRef
-from app.persistence.documents import ProjectMemorySnapshotDoc, construct_document
+from app.persistence.documents import ArtifactDoc, ProjectMemorySnapshotDoc, construct_document
 from app.persistence.protocols import (
     ArtifactRepository,
     MemoryRepository,
@@ -52,8 +55,9 @@ class MemoryMergeService:
             )
 
         await self._validate_sources(project.book_id, delta)
-        await self._validate_artifacts(delta)
-        state = self._apply(current, delta)
+        accepted_artifacts = await self._validate_artifacts(delta)
+        accepted_assets = self._accepted_assets(delta.project_id, accepted_artifacts)
+        state = self._apply(current, delta, accepted_assets)
         snapshot_payload = {
             "project_id": current.project_id,
             "memory_version": current.memory_version + 1,
@@ -116,7 +120,8 @@ class MemoryMergeService:
                     f"Coverage cites unknown source unit {addition.source_unit_id}"
                 )
 
-    async def _validate_artifacts(self, delta: MemoryDelta) -> None:
+    async def _validate_artifacts(self, delta: MemoryDelta) -> list[ArtifactDoc]:
+        artifacts: list[ArtifactDoc] = []
         for artifact_id in delta.source_artifact_ids:
             artifact = await self._artifacts.get_artifact(artifact_id)
             if (
@@ -127,11 +132,40 @@ class MemoryMergeService:
                 raise UnsupportedSourceError(
                     f"Memory delta cites unaccepted artifact {artifact_id}"
                 )
+            artifacts.append(artifact)
+        return artifacts
+
+    @staticmethod
+    def _accepted_assets(
+        project_id: str,
+        artifacts: list[ArtifactDoc],
+    ) -> list[dict[str, Any]]:
+        accepted: dict[str, dict[str, Any]] = {}
+        for artifact in artifacts:
+            if artifact.schema_version != "asset-set.v1" or artifact.content is None:
+                continue
+            raw_assets = artifact.content.get("assets")
+            if not isinstance(raw_assets, list):
+                raise UnsupportedSourceError("Accepted asset set omitted asset metadata")
+            for raw_asset in raw_assets:
+                try:
+                    asset = AssetRef.model_validate(raw_asset)
+                except ValidationError as error:
+                    raise UnsupportedSourceError(
+                        "Accepted asset set contains invalid asset metadata"
+                    ) from error
+                if asset.project_id != project_id:
+                    raise UnsupportedSourceError(
+                        f"Accepted asset {asset.asset_id} belongs to a different project"
+                    )
+                accepted[asset.asset_id] = asset.model_dump(mode="json")
+        return [accepted[key] for key in sorted(accepted)]
 
     @staticmethod
     def _apply(
         current: ProjectMemorySnapshotDoc,
         delta: MemoryDelta,
+        accepted_assets: list[dict[str, Any]],
     ) -> dict[str, Any]:
         facts = {item["fact_id"]: deepcopy(item) for item in current.facts}
         corrections = {item.fact_id: item for item in delta.fact_corrections}
@@ -191,18 +225,19 @@ class MemoryMergeService:
 
         book_spine = deepcopy(current.book_spine)
         terminology = {
-            item["canonical_form"]: deepcopy(item)
-            for item in book_spine.get("terminology", [])
+            item["canonical_form"]: deepcopy(item) for item in book_spine.get("terminology", [])
         }
-        for update in sorted(
-            delta.terminology_updates, key=lambda item: item.canonical_form
-        ):
+        for update in sorted(delta.terminology_updates, key=lambda item: item.canonical_form):
             terminology[update.canonical_form] = {
                 "term": update.term,
                 "canonical_form": update.canonical_form,
                 "meaning": update.meaning,
             }
         book_spine["terminology"] = [terminology[key] for key in sorted(terminology)]
+        assets = {
+            str(item["asset_id"]): deepcopy(item)
+            for item in [*current.asset_index, *accepted_assets]
+        }
 
         return {
             "book_spine": book_spine,
@@ -211,9 +246,7 @@ class MemoryMergeService:
             "world_state": deepcopy(current.world_state),
             "continuity": continuity,
             "coverage": coverage,
-            "asset_index": sorted(
-                deepcopy(current.asset_index), key=lambda item: item.get("asset_id", "")
-            ),
+            "asset_index": [assets[key] for key in sorted(assets)],
             "source_artifact_ids": sorted(
                 set(current.source_artifact_ids) | set(delta.source_artifact_ids)
             ),

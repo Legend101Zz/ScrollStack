@@ -12,6 +12,7 @@ from app.persistence.protocols import (
 )
 from app.services.domain_tools import MangaDirectorToolService
 from app.services.generation_runs import GenerationRunService
+from app.services.manga_reader import MangaReaderService
 from app.services.pdf_ingestion import PdfIngestionService
 from app.services.projects import MangaProjectService
 from app.services.scopes import ScopeService
@@ -24,6 +25,7 @@ class ControlPlaneServices:
     scopes: ScopeService
     generation_runs: GenerationRunService
     domain_tools: MangaDirectorToolService
+    manga_reader: MangaReaderService
 
 
 def build_services(
@@ -52,4 +54,5 @@ def build_services(
             dispatcher,
         ),
         domain_tools=MangaDirectorToolService(repositories, repositories),
+        manga_reader=MangaReaderService(repositories, media_root=media_root),
     )

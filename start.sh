@@ -8,4 +8,4 @@ if [[ ! -f .env ]]; then
   print "Created .env from .env.example. Add provider keys before agent or image generation."
 fi
 
-docker compose up -d
+docker compose --profile agent up -d
