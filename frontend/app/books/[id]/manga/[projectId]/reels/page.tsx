@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { ReelFeed } from "@/components/ReelFeed/ReelFeed";
+import { ReelFeedLoader } from "@/components/ReelFeed/ReelFeedLoader";
 import { loadFixtureReelFeed } from "@/components/ReelFeed/fixture-adapter";
 
 export const metadata: Metadata = {
@@ -9,9 +9,19 @@ export const metadata: Metadata = {
 
 export default async function ReelsPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string; projectId: string }>;
+  searchParams: Promise<{ fixture?: string | string[] }>;
 }) {
   const { id, projectId } = await params;
-  return <ReelFeed payload={loadFixtureReelFeed(id, projectId)} />;
+  const query = await searchParams;
+  const useFixture = process.env.NODE_ENV !== "production" && query.fixture === "1";
+  return (
+    <ReelFeedLoader
+      bookId={id}
+      fixture={useFixture ? loadFixtureReelFeed(id, projectId) : undefined}
+      projectId={projectId}
+    />
+  );
 }

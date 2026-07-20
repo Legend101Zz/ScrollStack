@@ -6,7 +6,7 @@ import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/Button";
 
-import type { ReelFeedItem } from "./fixture-adapter";
+import type { ReelFeedItem } from "./types";
 import { ReelPlayer } from "./ReelPlayer";
 
 type ReelViewportProps = {
