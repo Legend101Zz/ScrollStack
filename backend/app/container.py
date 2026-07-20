@@ -14,6 +14,7 @@ from app.services.domain_tools import MangaDirectorToolService
 from app.services.generation_runs import GenerationRunService
 from app.services.pdf_ingestion import PdfIngestionService
 from app.services.projects import MangaProjectService
+from app.services.reels import ReelPlayerService
 from app.services.scopes import ScopeService
 
 
@@ -24,6 +25,7 @@ class ControlPlaneServices:
     scopes: ScopeService
     generation_runs: GenerationRunService
     domain_tools: MangaDirectorToolService
+    reels: ReelPlayerService
 
 
 def build_services(
@@ -52,4 +54,10 @@ def build_services(
             dispatcher,
         ),
         domain_tools=MangaDirectorToolService(repositories, repositories),
+        reels=ReelPlayerService(
+            repositories,
+            repositories,
+            repositories,
+            repositories,
+        ),
     )

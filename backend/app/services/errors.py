@@ -47,3 +47,7 @@ class AuthorizationError(ControlPlaneError):
 
 class ArtifactValidationError(ControlPlaneError):
     code = "artifact_validation_failed"
+
+
+class InvalidProgressError(ControlPlaneError):
+    code = "invalid_progress"
