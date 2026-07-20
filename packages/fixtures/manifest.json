@@ -13,9 +13,13 @@
     { "schema": "manga_plan.v1", "path": "canonical/manga_plan.v1.json" },
     { "schema": "memory_delta.v1", "path": "canonical/memory_delta.v1.json" },
     { "schema": "model_receipt.v1", "path": "canonical/model_receipt.v1.json" },
+    { "schema": "reel_player_payload.v1", "path": "canonical/reel_player_payload.v1.json" },
+    { "schema": "reel_series.v1", "path": "canonical/reel_series.v1.json" },
     { "schema": "reel_spec.v1", "path": "canonical/reel_spec.v1.json" },
     { "schema": "rendered_page.v1", "path": "canonical/rendered_page.v1.json" },
     { "schema": "scope_manifest.v1", "path": "canonical/scope_manifest.v1.json" },
+    { "schema": "series_progress.v1", "path": "canonical/series_progress.v1.json" },
+    { "schema": "series_progress_update.v1", "path": "canonical/series_progress_update.v1.json" },
     { "schema": "source_ref.v1", "path": "canonical/source_ref.v1.json" },
     { "schema": "source_unit.v1", "path": "canonical/source_unit.v1.json" },
     { "schema": "stage_run.v1", "path": "canonical/stage_run.v1.json" }

@@ -10,9 +10,13 @@ import mangaManifest from "../schema/manga_manifest.v1.schema.json" with { type:
 import mangaPlan from "../schema/manga_plan.v1.schema.json" with { type: "json" };
 import memoryDelta from "../schema/memory_delta.v1.schema.json" with { type: "json" };
 import modelReceipt from "../schema/model_receipt.v1.schema.json" with { type: "json" };
+import reelPlayerPayload from "../schema/reel_player_payload.v1.schema.json" with { type: "json" };
+import reelSeries from "../schema/reel_series.v1.schema.json" with { type: "json" };
 import reelSpec from "../schema/reel_spec.v1.schema.json" with { type: "json" };
 import renderedPage from "../schema/rendered_page.v1.schema.json" with { type: "json" };
 import scopeManifest from "../schema/scope_manifest.v1.schema.json" with { type: "json" };
+import seriesProgress from "../schema/series_progress.v1.schema.json" with { type: "json" };
+import seriesProgressUpdate from "../schema/series_progress_update.v1.schema.json" with { type: "json" };
 import sourceRef from "../schema/source_ref.v1.schema.json" with { type: "json" };
 import sourceUnit from "../schema/source_unit.v1.schema.json" with { type: "json" };
 import stageRun from "../schema/stage_run.v1.schema.json" with { type: "json" };
@@ -30,9 +34,13 @@ export const contractSchemas = {
   "manga_plan.v1": mangaPlan,
   "memory_delta.v1": memoryDelta,
   "model_receipt.v1": modelReceipt,
+  "reel_player_payload.v1": reelPlayerPayload,
+  "reel_series.v1": reelSeries,
   "reel_spec.v1": reelSpec,
   "rendered_page.v1": renderedPage,
   "scope_manifest.v1": scopeManifest,
+  "series_progress.v1": seriesProgress,
+  "series_progress_update.v1": seriesProgressUpdate,
   "source_ref.v1": sourceRef,
   "source_unit.v1": sourceUnit,
   "stage_run.v1": stageRun,

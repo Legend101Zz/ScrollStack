@@ -9,6 +9,7 @@ from pydantic import ValidationError
 
 from app.contracts.manga import RenderedPage
 from app.contracts.reel import ReelSpec
+from app.contracts.reel_delivery import ReelPlayerPayload, ReelSeries, SeriesProgressUpdate
 from app.contracts.registry import CONTRACT_MODELS
 from scripts.export_contracts import DEFAULT_OUTPUT, export_contracts
 
@@ -79,3 +80,64 @@ def test_reel_spec_rejects_timeline_drift() -> None:
 
     with pytest.raises(ValidationError, match="scene durations"):
         ReelSpec.model_validate(payload)
+
+
+def test_reel_series_rejects_non_contiguous_sequences() -> None:
+    payload = json.loads(
+        (FIXTURE_ROOT / "canonical/reel_series.v1.json").read_text(encoding="utf-8")
+    )
+    payload["reels"][0]["sequence"] = 1
+
+    with pytest.raises(ValidationError, match="contiguous from zero"):
+        ReelSeries.model_validate(payload)
+
+
+def test_reel_player_rejects_unresolved_assets() -> None:
+    payload = json.loads(
+        (FIXTURE_ROOT / "canonical/reel_player_payload.v1.json").read_text(encoding="utf-8")
+    )
+    payload["assets"].pop("asset_music_tension_001")
+
+    with pytest.raises(ValidationError, match="must be resolved"):
+        ReelPlayerPayload.model_validate(payload)
+
+
+def test_reel_player_rejects_panel_asset_drift() -> None:
+    payload = json.loads(
+        (FIXTURE_ROOT / "canonical/reel_player_payload.v1.json").read_text(encoding="utf-8")
+    )
+    payload["reel_spec"]["scenes"][0]["asset_id"] = "asset_music_tension_001"
+
+    with pytest.raises(ValidationError, match="must belong"):
+        ReelPlayerPayload.model_validate(payload)
+
+
+def test_reel_player_only_requires_the_primary_panel_asset() -> None:
+    payload = json.loads(
+        (FIXTURE_ROOT / "canonical/reel_player_payload.v1.json").read_text(encoding="utf-8")
+    )
+    payload["manga_manifest"]["panels"][0]["visual_asset_ids"].append(
+        "asset_unused_secondary_crop"
+    )
+
+    ReelPlayerPayload.model_validate(payload)
+
+
+def test_reel_player_rejects_overlapping_captions() -> None:
+    payload = json.loads(
+        (FIXTURE_ROOT / "canonical/reel_player_payload.v1.json").read_text(encoding="utf-8")
+    )
+    payload["captions"][1]["start_frame"] = 89
+
+    with pytest.raises(ValidationError, match="ordered and non-overlapping"):
+        ReelPlayerPayload.model_validate(payload)
+
+
+def test_series_progress_update_requires_last_reel_to_be_viewed() -> None:
+    payload = json.loads(
+        (FIXTURE_ROOT / "canonical/series_progress_update.v1.json").read_text(encoding="utf-8")
+    )
+    payload["viewed_reel_ids"] = []
+
+    with pytest.raises(ValidationError, match="must appear"):
+        SeriesProgressUpdate.model_validate(payload)

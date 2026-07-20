@@ -14,6 +14,7 @@ from fastapi.responses import JSONResponse
 from app.api.books import books_router
 from app.api.control_plane import control_plane_router
 from app.api.internal_tools import internal_tools_router
+from app.api.reels import reels_router
 from app.container import ControlPlaneServices, build_services
 from app.persistence.mongo import initialize_mongo
 from app.persistence.repositories import BeanieRepositories, InMemoryRepositories
@@ -22,6 +23,7 @@ from app.services.errors import (
     ContextBudgetError,
     ControlPlaneError,
     InvalidPdfError,
+    InvalidProgressError,
     InvalidRunStateError,
     InvalidScopeError,
     MemoryConflictError,
@@ -79,7 +81,13 @@ def create_app(services: ControlPlaneServices | None = None) -> FastAPI:
             error_status = status.HTTP_409_CONFLICT
         elif isinstance(
             error,
-            (InvalidScopeError, UnsupportedSourceError, ContextBudgetError, InvalidPdfError),
+            (
+                InvalidScopeError,
+                InvalidProgressError,
+                UnsupportedSourceError,
+                ContextBudgetError,
+                InvalidPdfError,
+            ),
         ):
             error_status = status.HTTP_422_UNPROCESSABLE_ENTITY
         elif isinstance(error, PdfLimitError):
@@ -99,6 +107,7 @@ def create_app(services: ControlPlaneServices | None = None) -> FastAPI:
 
     application.include_router(books_router(services))
     application.include_router(control_plane_router(services))
+    application.include_router(reels_router(services))
     application.include_router(
         internal_tools_router(
             services,

@@ -14,6 +14,7 @@ from .documents import (
     MangaProjectDoc,
     ProjectMemorySnapshotDoc,
     ScopeManifestDoc,
+    SeriesProgressDoc,
     SourceUnitDoc,
     StageRunDoc,
     utc_now,
@@ -36,6 +37,7 @@ class InMemoryRepositories:
         self.projects: dict[str, MangaProjectDoc] = {}
         self.memory_snapshots: dict[tuple[str, int], ProjectMemorySnapshotDoc] = {}
         self.artifacts: dict[str, ArtifactDoc] = {}
+        self.series_progress: dict[tuple[str, str], SeriesProgressDoc] = {}
         self.runs: dict[str, GenerationRunDoc] = {}
         self.stages: dict[str, StageRunDoc] = {}
         self._lock = asyncio.Lock()
@@ -180,6 +182,67 @@ class InMemoryRepositories:
             and (not accepted_only or artifact.validation_status == "accepted")
         ]
         return sorted(artifacts, key=lambda artifact: (artifact.created_at, artifact.artifact_id))
+
+    async def list_accepted_reel_specs(self, project_id: str) -> list[ArtifactDoc]:
+        artifacts = [
+            artifact.model_copy(deep=True)
+            for artifact in self.artifacts.values()
+            if artifact.project_id == project_id
+            and artifact.kind == "reel_spec"
+            and artifact.validation_status == "accepted"
+            and artifact.content is not None
+        ]
+        return sorted(
+            artifacts,
+            key=lambda artifact: (artifact.created_at, artifact.artifact_id),
+        )
+
+    async def list_accepted_reel_specs_for_series(
+        self, series_id: str
+    ) -> list[ArtifactDoc]:
+        artifacts = [
+            artifact.model_copy(deep=True)
+            for artifact in self.artifacts.values()
+            if artifact.kind == "reel_spec"
+            and artifact.validation_status == "accepted"
+            and artifact.content is not None
+            and artifact.content.get("series_id") == series_id
+        ]
+        return sorted(
+            artifacts,
+            key=lambda artifact: (artifact.created_at, artifact.artifact_id),
+        )
+
+    async def get_accepted_reel_spec(self, reel_id: str) -> ArtifactDoc | None:
+        matches = [
+            artifact
+            for artifact in self.artifacts.values()
+            if artifact.kind == "reel_spec"
+            and artifact.validation_status == "accepted"
+            and artifact.content is not None
+            and artifact.content.get("reel_id") == reel_id
+        ]
+        if not matches:
+            return None
+        latest = max(matches, key=lambda artifact: (artifact.created_at, artifact.artifact_id))
+        return _copy_document(latest)
+
+    async def get_series_progress(
+        self, user_id: str, series_id: str
+    ) -> SeriesProgressDoc | None:
+        progress = self.series_progress.get((user_id, series_id))
+        return _copy_document(progress) if progress else None
+
+    async def save_series_progress(
+        self, progress: SeriesProgressDoc
+    ) -> SeriesProgressDoc:
+        key = (progress.user_id, progress.series_id)
+        async with self._lock:
+            existing = self.series_progress.get(key)
+            if existing is not None and _same_progress(existing, progress):
+                return _copy_document(existing)
+            self.series_progress[key] = _copy_document(progress)
+            return _copy_document(progress)
 
     async def create_run_if_absent(self, run: GenerationRunDoc) -> tuple[GenerationRunDoc, bool]:
         async with self._lock:
@@ -371,6 +434,72 @@ class BeanieRepositories:
             query["validation_status"] = "accepted"
         return await ArtifactDoc.find(query).sort(+ArtifactDoc.created_at).to_list()
 
+    async def list_accepted_reel_specs(self, project_id: str) -> list[ArtifactDoc]:
+        return (
+            await ArtifactDoc.find(
+                {
+                    "project_id": project_id,
+                    "kind": "reel_spec",
+                    "validation_status": "accepted",
+                    "content": {"$ne": None},
+                }
+            )
+            .sort(+ArtifactDoc.created_at, +ArtifactDoc.artifact_id)
+            .to_list()
+        )
+
+    async def list_accepted_reel_specs_for_series(
+        self, series_id: str
+    ) -> list[ArtifactDoc]:
+        return (
+            await ArtifactDoc.find(
+                {
+                    "kind": "reel_spec",
+                    "validation_status": "accepted",
+                    "content.series_id": series_id,
+                }
+            )
+            .sort(+ArtifactDoc.created_at, +ArtifactDoc.artifact_id)
+            .to_list()
+        )
+
+    async def get_accepted_reel_spec(self, reel_id: str) -> ArtifactDoc | None:
+        return await ArtifactDoc.find(
+            {
+                "kind": "reel_spec",
+                "validation_status": "accepted",
+                "content.reel_id": reel_id,
+            }
+        ).sort(-ArtifactDoc.created_at, -ArtifactDoc.artifact_id).first_or_none()
+
+    async def get_series_progress(
+        self, user_id: str, series_id: str
+    ) -> SeriesProgressDoc | None:
+        return await SeriesProgressDoc.find_one(
+            SeriesProgressDoc.user_id == user_id,
+            SeriesProgressDoc.series_id == series_id,
+        )
+
+    async def save_series_progress(
+        self, progress: SeriesProgressDoc
+    ) -> SeriesProgressDoc:
+        existing = await self.get_series_progress(progress.user_id, progress.series_id)
+        if existing is not None:
+            if _same_progress(existing, progress):
+                return existing
+            progress.id = existing.id
+            return cast(SeriesProgressDoc, await progress.replace())
+        try:
+            return cast(SeriesProgressDoc, await progress.insert())
+        except DuplicateKeyError:
+            existing = await self.get_series_progress(progress.user_id, progress.series_id)
+            if existing is None:
+                raise
+            if _same_progress(existing, progress):
+                return existing
+            progress.id = existing.id
+            return cast(SeriesProgressDoc, await progress.replace())
+
     async def create_run_if_absent(self, run: GenerationRunDoc) -> tuple[GenerationRunDoc, bool]:
         try:
             return await run.insert(), True
@@ -408,3 +537,11 @@ class BeanieRepositories:
             return cast(StageRunDoc, await stage.insert())
         stage.id = existing.id
         return cast(StageRunDoc, await stage.replace())
+
+
+def _same_progress(left: SeriesProgressDoc, right: SeriesProgressDoc) -> bool:
+    return (
+        left.last_manga_page == right.last_manga_page
+        and left.last_reel_id == right.last_reel_id
+        and left.viewed_reel_ids == right.viewed_reel_ids
+    )

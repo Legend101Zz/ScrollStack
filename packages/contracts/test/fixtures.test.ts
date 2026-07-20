@@ -65,3 +65,26 @@ describe("strict ReelSpec boundary", () => {
     expect(isReelSpec(reel)).toBe(false);
   });
 });
+
+describe("reel delivery boundary", () => {
+  const playerPath = manifest.fixtures.find(
+    (item) => item.schema === "reel_player_payload.v1",
+  )?.path;
+  if (!playerPath) throw new Error("reel player fixture is missing");
+
+  it("rejects a non-browser media URL", () => {
+    const player = fixture(playerPath) as { poster_url: string };
+    player.poster_url = "file:///etc/passwd";
+    expect(validateContract("reel_player_payload.v1", player).valid).toBe(false);
+  });
+
+  it("rejects unknown progress update fields", () => {
+    const progressPath = manifest.fixtures.find(
+      (item) => item.schema === "series_progress_update.v1",
+    )?.path;
+    if (!progressPath) throw new Error("progress update fixture is missing");
+    const progress = fixture(progressPath) as Record<string, unknown>;
+    progress.user_id = "spoofed-user";
+    expect(validateContract("series_progress_update.v1", progress).valid).toBe(false);
+  });
+});
