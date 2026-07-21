@@ -60,6 +60,7 @@ class MangaPagePlanningService:
         stage_run_id: str,
         plan_artifact_id: str,
         script_set: PageScriptSet,
+        context_pack_id: str | None = None,
         author: str = "agent",
     ) -> ArtifactDoc:
         run = await self._runs.get_run(run_id)
@@ -77,10 +78,11 @@ class MangaPagePlanningService:
             plan = MangaPlan.model_validate(plan_artifact.content)
         except ValidationError as error:
             raise ArtifactValidationError("Accepted MangaPlan content is invalid") from error
+        expected_context_pack_id = context_pack_id or plan.context_pack_id
         if (
             run.project_id != script_set.project_id
             or script_set.plan_artifact_id != plan_artifact_id
-            or script_set.context_pack_id != plan.context_pack_id
+            or script_set.context_pack_id != expected_context_pack_id
         ):
             raise AuthorizationError("PageScriptSet identity does not match accepted run lineage")
         if len(script_set.pages) > plan.target_page_count:

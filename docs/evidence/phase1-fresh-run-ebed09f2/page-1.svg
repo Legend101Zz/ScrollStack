@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Thumbnail for page_1" viewBox="0 0 600 900">
+<defs>
+<marker id="reading_arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M 0 0 L 6 3 L 0 6 Z" fill="#bd392f" /></marker>
+<clipPath id="clip_node_panel_0"><polygon points="18.00,18.00 582.00,18.00 582.00,882.00 18.00,882.00" /></clipPath>
+</defs>
+<rect width="600" height="900" fill="#171512" />
+<polygon data-panel-id="panel_1_0" points="18.00,18.00 582.00,18.00 582.00,882.00 18.00,882.00" fill="#f4eedf" stroke="#171512" stroke-width="4" />
+<text x="300.00" y="450.00" text-anchor="middle" font-family="sans-serif" font-size="18" font-weight="700" fill="#171512" stroke="#f4eedf" stroke-width="7" paint-order="stroke">1. close_up</text>
+<rect data-text-id="text_1_0" x="90.00" y="540.00" width="420.00" height="225.00" fill="none" stroke="#286f6c" stroke-width="3" stroke-dasharray="5 4" />
+</svg>

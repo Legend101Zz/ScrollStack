@@ -45,7 +45,7 @@ services:
     ports:
       - "8000:8000"
     healthcheck:
-      test: ["CMD", "uv", "run", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/readyz', timeout=2)"]
+      test: ["CMD", "uv", "run", "--no-dev", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/readyz', timeout=2)"]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -61,7 +61,7 @@ services:
     build:
       context: ./backend
     restart: unless-stopped
-    command: ["uv", "run", "celery", "-A", "app.worker.celery_app", "worker", "--loglevel=INFO"]
+    command: ["uv", "run", "--no-dev", "celery", "-A", "app.worker.celery_app", "worker", "--loglevel=INFO", "--concurrency=1"]
     environment:
       MONGODB_URI: ${MONGODB_URI:-mongodb://mongo:27017/scrollstack}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
@@ -89,7 +89,7 @@ services:
     environment:
       AGENT_WORKER_TOKEN: ${AGENT_WORKER_TOKEN:-replace-with-a-long-random-token}
       AGENT_PROVIDER: ${AGENT_PROVIDER:-minimax}
-      AGENT_MODEL: ${AGENT_MODEL:-MiniMax-M3}
+      AGENT_MODEL: ${AGENT_MODEL:-MiniMax-M2.7-highspeed}
       AGENT_MODEL_API_KEY_ENV: ${AGENT_MODEL_API_KEY_ENV:-MINIMAX_API_KEY}
       AGENT_MAX_CONCURRENCY: ${AGENT_MAX_CONCURRENCY:-2}
       AGENT_SESSION_DIR: /data/agent-sessions

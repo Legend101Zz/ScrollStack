@@ -1609,3 +1609,220 @@ feedback arrives:
   immutable successors, and bounded retry/cost policy.
 - **Phase 4:** editor/inspection affordances, mobile/desktop reader acceptance,
   accessibility, observability, and final side-by-side evidence.
+
+## 17. User feedback — 2026-07-21
+
+### Verbatim feedback
+
+> can we switch model to MiniMax-M2.7-highspeed\tSame performance as M2.7
+> • Significantly faster inference as its faster also try to use the openrouter key to generate images so we can see the manga you are generting how nice it is
+
+### Feedback mapping
+
+1. **Workflow — text-agent execution:** switch the configured model used by
+   `manga_direction`, `manga_page_writing`, and `manga_thumbnail` from
+   `MiniMax-M3` to the pinned `MiniMax-M2.7-highspeed` path, then prove the exact
+   provider/model receipt on a bounded completion. This supersedes the earlier
+   MiniMax-M3-only instruction for subsequent attempts; existing M3 receipts
+   remain immutable historical evidence.
+2. **Workflow + visual style — image generation:** the user explicitly
+   authorizes a bounded OpenRouter image attempt so the manga can be judged
+   visually. Use the configured `google/gemini-2.5-flash-image` path only after
+   accepted Phase 1 script/layout artifacts exist, persist attempt/cost/receipt
+   evidence, and do not describe this authorization as Phase 2 completion.
+
+### Implementation status
+
+- Recorded before changing the configured text model or invoking OpenRouter.
+- The configured text-agent path now uses `MiniMax-M2.7-highspeed`. A direct
+  provider smoke returned `READY` with HTTP 200 in 3,199 ms (28 input and 28
+  output tokens), with no fallback.
+- The fresh Phase 1 run completed through accepted page writing and thumbnail
+  artifacts. Stable page/layout/artifact IDs are recorded in Section 18.
+- The user-authorized OpenRouter experiment generated one key-panel image for
+  each of the two pages in a separate run. It did not alter the Phase 1 run's
+  zero-image proof and must not be described as Phase 2 completion.
+
+## 18. Next-session handoff — fresh Phase 1 run and preview review
+
+### Branch and worktree state at handoff
+
+- Branch: `codex/mrigesh-core-vertical-slice`
+- Base/current HEAD: `51dd5c9574d2844c50ed5b1bdbcde25fd2fdf972`
+- The implementation and evidence are intentionally uncommitted. Do not discard
+  the dirty worktree or reset it to HEAD.
+- Commit and push are deferred until the user reviews the previews and any
+  accepted feedback is incorporated.
+- No Utkarsh-owned path was edited.
+
+### What is now implemented
+
+- Preserved `manga-pipeline.v1` and added the explicit
+  `manga-page-dsl.v2` workflow route.
+- Wired `manga_page_writing` and `manga_thumbnail` after the accepted
+  `MangaPlan`, with fresh bounded contexts and accepted parent artifacts.
+- Enforced project, run, stage, context-pack, and parent-artifact authorization;
+  agent candidates must be durably accepted through the domain-tool broker.
+- Restored active-stage state for resume/idempotency and fixed goal-level agent
+  session registry keys.
+- Stopped the v2 route after accepted scripts, thumbnails, validation, compiled
+  layouts, and SVG previews. The Phase 1 run made zero image attempts.
+- Added/expanded workflow and API tests for authorization, resume,
+  idempotency, v1 preservation, and the zero-image stop.
+- Switched configured subsequent text execution to
+  `MiniMax-M2.7-highspeed` and added a separate, explicitly user-authorized
+  OpenRouter preview script.
+
+### Fresh source and Phase 1 lineage
+
+- Input PDF SHA-256 was verified as
+  `183ca8b5a2da9306fbe404090818e2fbeabba42cafb32cd619fc7ca7c3705a5b`.
+- Bounded source scope: PDF pages 13-15.
+- Book: `book_cc78f33dffcd195ae0941f2e`
+- Project: `project_25e6d9eefa7e174f89d88810`
+- Scope: `scope_a93d4dfa9fe9aac6035d7792`
+- Run: `run_ebed09f2e5e514d4c61c21d0` (`manga-page-dsl.v2`, succeeded)
+
+Stage and context lineage:
+
+- Manga direction accepted artifact:
+  `manga_plan_06df7e114aed01809f8b724c`
+- Direction context: `context_aac1d0f892aa45e9e58138fe`
+- Page-writing stage: `stage_manga_page_writing_3d885fc1000adf4d12f8`
+- Page-writing context: `context_07d08909f212f8f99b00a33a`
+- Accepted PageScriptSet:
+  `accepted_page_script_set_3d885fc1000adf4d12f8d221`
+- Broker PageScriptSet candidate:
+  `page_script_set_f96c659cac6a3219a670832e`
+- Thumbnail stage: `stage_manga_thumbnail_8f7540b3765fbcc37996`
+- Thumbnail context: `context_ec428dd1e149bb4b6fa39e95`
+- Accepted ThumbnailSet:
+  `accepted_thumbnail_set_8f7540b3765fbcc3799630a3`
+- Broker ThumbnailSet candidate:
+  `thumbnail_set_bcb110eb7a0b8320330ed0c3`
+- Validation report: `page_validation_ee36a2a2bdf973d392e6e4c5`
+  (`passed=true`, zero warnings, zero errors)
+- Page layouts: `page_layout_f6d17244597781943044a791`,
+  `page_layout_f64f0b004ea4bebeeadd34a6`
+- Compiled layouts: `compiled_layout_1327758d2b5aaab3ac56ad5d`,
+  `compiled_layout_8ea5f49a28b75a60c71b14e7`
+- Compiler/content hashes:
+  `1327758d2b5aaab3ac56ad5d` and
+  `8ea5f49a28b75a60c71b14e7`
+- SVG preview artifacts:
+  `thumbnail_preview_c883b5a2aae7eab50b774c53`,
+  `thumbnail_preview_b089ace5d447b45641b7bdce`
+- SVG hashes:
+  `c883b5a2aae7eab50b774c53b2972bf1fbace2017f396e6b759c6c7965455369`,
+  `b089ace5d447b45641b7bdce6a867ba5541ac2c2b53c50dfc9420c9fcb9740e6`
+
+Fresh repository/service reconstruction produced byte-identical SVG bytes for
+both pages. The first proof command emitted a harmless unawaited-close warning;
+rerun the proof with the Mongo client close awaited before final acceptance so
+the final evidence is clean.
+
+### Exact accepted text-model receipts
+
+1. Direction (historical accepted parent): `MiniMax-M3`, 14,805 input tokens,
+   9,356 output tokens, 145,086 ms, `$0.01652886`.
+2. Page writing: `MiniMax-M2.7-highspeed`, 32,559 input tokens, 6,928 output
+   tokens, 90,979 ms, `$0.038198565`.
+3. Thumbnailing: `MiniMax-M2.7-highspeed`, 17,166 input tokens, 3,093 output
+   tokens, 39,569 ms, `$0.0196305`.
+
+Accepted-receipt total: **`$0.074357925`**. Failed attempts that ended before a
+durable receipt may have incurred provider billing that this repository cannot
+measure exactly; do not fold them into or mislabel them as the accepted total.
+
+Phase 1 image attempts: **0**. Phase 1 image cost: **`$0`**.
+
+### Inspectable Phase 1 SVG evidence
+
+- `docs/evidence/phase1-fresh-run-ebed09f2/page-0.svg`
+- `docs/evidence/phase1-fresh-run-ebed09f2/page-1.svg`
+- Rasterized review copies are alongside them as `page-0.png` and `page-1.png`.
+
+Page 0 is a large base panel with a lower inset and two reading-order beats.
+Page 1 is a dominant single close-up panel. These are structural name/SVG
+previews, not finished art.
+
+### Separately authorized OpenRouter visual experiment
+
+- Run: `run_phase2_preview_d5789d318b525cec82ff05f0`
+- Stage: `stage_asset_generation_d5789d318b525cec82ff`
+- Basis artifact: `manga_plan_phase2_basis_d5789d318b525cec82ff05f0`
+- AssetSet: `asset_set_43b2e9991957840dac4630b3`
+- Provider/model: `openrouter` / `google/gemini-2.5-flash-image`
+- Attempts: 2; accepted images: 2; exact cost: **`$0.0775631`**
+- Page 0 asset: `asset_key_panel_45a6e21cbc2a4a43bd85125c`, hash
+  `0a34911226477dc8149c90d09112309315329c8a7a5e353721d6bc6782ce51c1`,
+  832x1248 PNG, 217 input/1,298 output tokens, 7,986 ms, `$0.0387851`.
+- Page 1 asset: `asset_key_panel_099a5344491ace1a20bbbec7`, hash
+  `a0c825dcec90779cdca5a56c75dd0bbe312bef7d1199094b4e05b65b8747b638`,
+  832x1248 PNG, 260 input/1,290 output tokens, 9,468 ms, `$0.038778`.
+- Evidence paths:
+  `docs/evidence/phase2-openrouter-preview-d5789d31/page-0-key-panel.png` and
+  `docs/evidence/phase2-openrouter-preview-d5789d31/page-1-key-panel.png`.
+
+Both images are technically successful monochrome manga renders, but both
+violate the prompt's no-embedded-text instruction by rendering the English
+heading `SATIATION, THEN THE LOCAL-VS-GLOBAL TRADE-OFF.`; page 1 also contains
+small pseudo-lettering around the message graphics. Treat this as unresolved
+visual-style/lettering feedback, not accepted output. Do not generate more
+images without a new explicit user instruction.
+
+### Exact next-session task
+
+1. Run the required preflight (`git status`, `git rev-parse HEAD`, `git fetch`),
+   confirm the local branch still matches the intended remote base, and reread
+   `AGENTS.md`, this handoff, and technical-imp sections 9, 12, 19, 22, and 23.
+2. Show the user both Phase 1 SVG previews and the two separately authorized
+   OpenRouter key-panel previews from the paths above. Ask for concrete feedback.
+3. Before changing anything in response, append the user's exact wording to a
+   new dated `User feedback` subsection here. Map every item to its page, panel,
+   layout node, text element, camera/blocking instruction, or workflow stage and
+   classify it using the requested taxonomy.
+4. Implement Phase 1 script/layout/validation/SVG feedback and regenerate only
+   affected SVG previews with zero image-model calls. Continue the loop if more
+   feedback arrives. Image iteration requires separate explicit authorization.
+5. Add focused coverage for the broker's PageScript hydration/canonicalization
+   path and verify the public API exposes the corrected `stage_run_id`. Rerun
+   clean byte-identical reconstruction with the Mongo client properly closed.
+6. Run the full required gates after the latest patch (the full suite was green
+   before the final broker/stage-ID changes; only focused tests have run since):
+
+   ```bash
+   cd "/Volumes/Mrigesh SSD/ScrollStack-manga/backend"
+   uv run pytest tests/ -q
+   uv run ruff check .
+   uv run mypy app tests
+
+   cd "/Volumes/Mrigesh SSD/ScrollStack-manga"
+   corepack pnpm contracts:generate
+   corepack pnpm --filter @scrollstack/contracts check:generated
+   corepack pnpm check
+   docker compose --env-file .env.example config --quiet
+   zsh -n start.sh
+   zsh -n stop.sh
+   git diff --check
+   ```
+
+7. Update this handoff with implemented/unresolved feedback, before/after
+   evidence, rejected alternatives, exact final costs and validation results,
+   and genuine remaining Phase 1/2/3/4 work.
+8. Only after user acceptance and green verification, intentionally commit all
+   accepted in-scope work, push `codex/mrigesh-core-vertical-slice`, and prove
+   local HEAD equals `origin/codex/mrigesh-core-vertical-slice`.
+
+### Do not lose these boundaries
+
+- Do not reset or overwrite the current dirty worktree.
+- Do not edit Utkarsh-owned reel paths.
+- Do not silently reinterpret subjective feedback.
+- Do not call an image model unless the user explicitly authorizes another
+  attempt.
+- Do not mark Phase 2 complete because SVG thumbnails or these two experimental
+  images exist.
+- Phase 2 still needs bounded reusable asset generation, scene composition,
+  lettering, deterministic final rendering, reader v2 integration, and
+  acceptance. Phases 3 and 4 remain as described in Section 16.

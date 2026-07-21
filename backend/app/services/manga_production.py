@@ -103,6 +103,7 @@ class MangaProductionService:
         manga_plan_artifact: ArtifactDoc,
         *,
         attempt: int,
+        stage_run_id: str | None = None,
     ) -> ArtifactDoc:
         plan = self._accepted_plan(run, manga_plan_artifact)
         max_assets = min(int(run.budget["max_key_panels"]), len(plan.beats))
@@ -216,6 +217,7 @@ class MangaProductionService:
                     artifact_id=artifact_id,
                     project_id=run.project_id,
                     run_id=run.run_id,
+                    stage_run_id=stage_run_id,
                     kind="asset_request_set",
                     schema_version="image-asset.v1",
                     content=asset_payload,
@@ -264,6 +266,7 @@ class MangaProductionService:
             artifact_id=f"asset_set_{digest[:24]}",
             project_id=run.project_id,
             run_id=run.run_id,
+            stage_run_id=stage_run_id,
             kind="asset_request_set",
             schema_version=ASSET_SET_SCHEMA_VERSION,
             content=payload,

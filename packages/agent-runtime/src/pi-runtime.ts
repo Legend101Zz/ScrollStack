@@ -203,7 +203,7 @@ export class PiAgentRuntime implements ScrollStackAgentRuntime {
     };
     const live: LiveSession = { runId: goal.run_id, session, goalType: policy.goal_type, trace };
     this.sessionsByRef.set(session.sessionId, live);
-    this.sessionsByRun.set(goal.run_id, live);
+    this.sessionsByRun.set(goal.goal_id, live);
 
     let turnCount = 0;
     const unsubscribe = session.subscribe((event) => {
@@ -255,7 +255,7 @@ export class PiAgentRuntime implements ScrollStackAgentRuntime {
     } finally {
       unsubscribe();
       options.signal?.removeEventListener("abort", abort);
-      this.sessionsByRun.delete(goal.run_id);
+      this.sessionsByRun.delete(goal.goal_id);
     }
   }
 

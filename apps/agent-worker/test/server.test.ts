@@ -145,7 +145,7 @@ describe("agent worker", () => {
     expect((await instance.inject({ method: "GET", url: "/readyz" })).statusCode).toBe(503);
   });
 
-  it("cancels an asynchronous run by run_id", async () => {
+  it("cancels an asynchronous run by goal execution id", async () => {
     const runtime = new FakeRuntime(
       async (_goal, _context, options) =>
         new Promise<AgentRunResult>((_resolve, reject) => {
@@ -166,13 +166,13 @@ describe("agent worker", () => {
     expect(started.statusCode).toBe(202);
     const cancelled = await instance.inject({
       method: "POST",
-      url: "/internal/v1/agent-runs/run-1/cancel",
+      url: "/internal/v1/agent-runs/goal-1/cancel",
       headers: { authorization: `Bearer ${token}` },
       payload: {},
     });
     expect(cancelled.statusCode).toBe(200);
     expect(cancelled.json().state).toBe("CANCELLED");
-    expect(runtime.cancellations).toContain("run-1");
+    expect(runtime.cancellations).toContain("goal-1");
   });
 
   it("rejects excess concurrency without queuing another paid run", async () => {
@@ -218,7 +218,7 @@ describe("agent worker", () => {
     release?.();
   });
 
-  it("allows a bounded retry after failure but reuses a succeeded run", async () => {
+  it("retries and reuses one goal while allowing later goals in the generation run", async () => {
     let attempts = 0;
     const runtime = new FakeRuntime(async () => {
       attempts += 1;
@@ -251,18 +251,25 @@ describe("agent worker", () => {
       method: "POST",
       url: "/internal/v1/agent-runs",
       headers: { authorization: `Bearer ${token}` },
-      payload: { goal: { ...goal, goal_id: "goal-retry" }, context },
+      payload: { goal, context },
     });
     const repeatedSuccess = await instance.inject({
       method: "POST",
       url: "/internal/v1/agent-runs",
       headers: { authorization: `Bearer ${token}` },
-      payload: { goal: { ...goal, goal_id: "goal-repeated" }, context },
+      payload: { goal, context },
+    });
+    const nextGoal = await instance.inject({
+      method: "POST",
+      url: "/internal/v1/agent-runs",
+      headers: { authorization: `Bearer ${token}` },
+      payload: { goal: { ...goal, goal_id: "goal-page-writing" }, context },
     });
 
     expect(first.statusCode).toBe(422);
     expect(retry.statusCode).toBe(200);
     expect(repeatedSuccess.statusCode).toBe(200);
-    expect(attempts).toBe(2);
+    expect(nextGoal.statusCode).toBe(200);
+    expect(attempts).toBe(3);
   });
 });

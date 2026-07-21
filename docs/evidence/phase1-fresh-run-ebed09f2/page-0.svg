@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Thumbnail for page_0" viewBox="0 0 600 900">
+<defs>
+<marker id="reading_arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M 0 0 L 6 3 L 0 6 Z" fill="#bd392f" /></marker>
+<clipPath id="clip_node_panel_0_p0"><polygon points="18.00,18.00 582.00,18.00 582.00,882.00 18.00,882.00" /></clipPath>
+<clipPath id="clip_node_panel_0_p1"><polygon points="72.00,495.00 528.00,495.00 528.00,855.00 72.00,855.00" /></clipPath>
+</defs>
+<rect width="600" height="900" fill="#171512" />
+<polygon data-panel-id="panel_0_0" points="18.00,18.00 582.00,18.00 582.00,882.00 18.00,882.00" fill="#f4eedf" stroke="#171512" stroke-width="4" />
+<polygon data-panel-id="panel_0_1" points="72.00,495.00 528.00,495.00 528.00,855.00 72.00,855.00" fill="#f4eedf" stroke="#171512" stroke-width="4" />
+<path data-reading-edge="panel_0_0:panel_0_1" d="M 300.00 450.00 L 300.00 675.00" stroke="#bd392f" stroke-width="4" stroke-dasharray="8 6" fill="none" opacity="0.78" marker-end="url(#reading_arrow)" />
+<text x="300.00" y="450.00" text-anchor="middle" font-family="sans-serif" font-size="18" font-weight="700" fill="#171512" stroke="#f4eedf" stroke-width="7" paint-order="stroke">1. medium</text>
+<text x="300.00" y="675.00" text-anchor="middle" font-family="sans-serif" font-size="18" font-weight="700" fill="#171512" stroke="#f4eedf" stroke-width="7" paint-order="stroke">2. wide</text>
+<rect data-text-id="text_0_0" x="120.00" y="630.00" width="360.00" height="135.00" fill="none" stroke="#286f6c" stroke-width="3" stroke-dasharray="5 4" />
+<rect data-text-id="text_0_1" x="120.00" y="675.00" width="360.00" height="135.00" fill="none" stroke="#286f6c" stroke-width="3" stroke-dasharray="5 4" />
+</svg>

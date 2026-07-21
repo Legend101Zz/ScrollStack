@@ -1,7 +1,7 @@
 ---
 name: manga-direction
 description: Direct a grounded manga adaptation without composing render code.
-version: 1.0.0
+version: 1.1.0
 ---
 
 # Manga direction

@@ -56,7 +56,14 @@ const TOOL_SCHEMAS: Readonly<Record<DomainToolName, TSchema>> = {
   ),
   submit_page_script_set: Type.Object({ script_set: jsonObject }, { additionalProperties: false }),
   get_page_script_set: Type.Object({ artifact_id: id }, { additionalProperties: false }),
-  validate_layout_draft: Type.Object({ page_plan: jsonObject }, { additionalProperties: false }),
+  validate_layout_draft: Type.Object(
+    {
+      page_plan: jsonObject,
+      script_set_artifact_id: Type.Optional(id),
+      page_index: Type.Optional(Type.Integer({ minimum: 0, maximum: 999 })),
+    },
+    { additionalProperties: false },
+  ),
   submit_thumbnail_set: Type.Object(
     { thumbnail_set: jsonObject },
     { additionalProperties: false },

@@ -267,6 +267,8 @@ def test_invalid_thumbnail_persists_addressable_report_without_preview(tmp_path:
 def test_thumbnail_tool_enforces_project_and_active_stage_before_compiling(tmp_path: Path) -> None:
     repository = InMemoryRepositories()
     context_payload = fixture("context_pack.v1.json")
+    context_payload["purpose"] = "manga_thumbnail"
+    context_payload["parent_artifacts"] = []
     repository.runs["run_tool"] = construct_document(
         GenerationRunDoc,
         run_id="run_tool",

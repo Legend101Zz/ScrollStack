@@ -10,7 +10,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.container import build_services
-from app.contracts.context import GenerationConstraints, MemoryDelta
+from app.contracts.context import AgentGoalType, GenerationConstraints, MemoryDelta
+from app.contracts.manga import MangaPagePlan, PageScriptSet, ThumbnailSet
 from app.contracts.source import PageRange
 from app.main import create_app
 from app.persistence.documents import (
@@ -20,13 +21,14 @@ from app.persistence.documents import (
     construct_document,
 )
 from app.persistence.repositories import InMemoryRepositories
-from app.services.agent_worker import AgentExecutionResult
+from app.services.agent_worker import AgentExecutionResult, AgentWorkerError
 from app.services.context_compiler import ContextCompiler
 from app.services.domain_tools import DomainToolRequest, MangaDirectorToolService
 from app.services.errors import InvalidPdfError, InvalidScopeError, NotFoundError, PdfLimitError
 from app.services.generation_workflow import GenerationWorkflowService
 from app.services.image_generation import GeneratedImage, ImageGenerationError
 from app.services.memory import MemoryMergeService
+from app.services.page_domain_tools import MangaDomainToolService
 from app.services.pdf_ingestion import PdfIngestionService
 from app.services.projects import MangaProjectService
 from app.services.scopes import ScopeService
@@ -451,13 +453,242 @@ class BrokeredFakeAgent:
             trace={
                 "session_id": "session_1",
                 "provider": "minimax",
-                "model": "MiniMax-M3",
+                "model": "MiniMax-M2.7-highspeed",
                 "skill_hash": "d" * 64,
                 "tokens": {"input": 200, "output": 100, "total": 300},
                 "cost_usd": 0.01,
                 "latency_ms": 50,
             },
         )
+
+
+class BrokeredV2FakeAgent:
+    def __init__(
+        self,
+        repository: InMemoryRepositories,
+        *,
+        media_root: Path,
+        fail_thumbnail_once: bool = False,
+    ) -> None:
+        self.repository = repository
+        self.tools = MangaDomainToolService(repository, repository, media_root=media_root)
+        self.fail_thumbnail_once = fail_thumbnail_once
+        self.goal_calls: list[AgentGoalType] = []
+
+    async def run(
+        self,
+        goal: Any,
+        context: Any,
+        *,
+        instructions: str | None = None,
+    ) -> AgentExecutionResult:
+        del instructions
+        self.goal_calls.append(goal.goal_type)
+        if goal.goal_type == AgentGoalType.MANGA_DIRECTION:
+            candidate = plan_for(context)
+            tool_name = "submit_manga_plan"
+            arguments = {"plan": candidate}
+        elif goal.goal_type == AgentGoalType.MANGA_PAGE_WRITING:
+            plan_ref = next(
+                item for item in context.parent_artifacts if item.kind.value == "manga_plan"
+            )
+            plan_artifact = await self.repository.get_artifact(plan_ref.artifact_id)
+            assert plan_artifact is not None and plan_artifact.content is not None
+            candidate = self._script_candidate(
+                plan_artifact.content,
+                plan_artifact_id=plan_artifact.artifact_id,
+                context_pack_id=context.context_pack_id,
+            )
+            tool_name = "submit_page_script_set"
+            arguments = {"script_set": candidate}
+        elif goal.goal_type == AgentGoalType.MANGA_THUMBNAIL:
+            if self.fail_thumbnail_once:
+                self.fail_thumbnail_once = False
+                raise AgentWorkerError("synthetic thumbnail worker interruption")
+            script_ref = next(
+                item for item in context.parent_artifacts if item.kind.value == "page_script_set"
+            )
+            script_artifact = await self.repository.get_artifact(script_ref.artifact_id)
+            assert script_artifact is not None and script_artifact.content is not None
+            candidate = self._thumbnail_candidate(
+                script_artifact.content,
+                script_artifact_id=script_artifact.artifact_id,
+            )
+            tool_name = "submit_thumbnail_set"
+            arguments = {"thumbnail_set": candidate}
+        else:
+            raise AssertionError(f"Unexpected goal type: {goal.goal_type}")
+
+        await self.tools.execute(
+            tool_name,
+            DomainToolRequest.model_validate(
+                {
+                    "arguments": arguments,
+                    "scope": {
+                        "correlation_id": goal.goal_id,
+                        "goal_id": goal.goal_id,
+                        "run_id": goal.run_id,
+                        "stage_run_id": goal.stage_run_id,
+                        "context_pack_id": context.context_pack_id,
+                        "project_id": context.project_id,
+                    },
+                }
+            ),
+        )
+        call_index = len(self.goal_calls)
+        return AgentExecutionResult(
+            candidate=candidate,
+            trace={
+                "session_id": f"session_v2_{call_index}",
+                "provider": "minimax",
+                "model": "MiniMax-M2.7-highspeed",
+                "skill_hash": str(call_index) * 64,
+                "tokens": {
+                    "input": 200 + call_index,
+                    "output": 100 + call_index,
+                    "total": 300 + 2 * call_index,
+                },
+                "cost_usd": 0.01 * call_index,
+                "latency_ms": 50 + call_index,
+            },
+        )
+
+    @staticmethod
+    def _script_candidate(
+        plan_payload: dict[str, Any],
+        *,
+        plan_artifact_id: str,
+        context_pack_id: str,
+    ) -> dict[str, Any]:
+        beats = plan_payload["beats"][:4]
+        pages: list[dict[str, Any]] = []
+        for page_index in range(2):
+            panels: list[dict[str, Any]] = []
+            for panel_index in range(2):
+                beat = beats[page_index * 2 + panel_index]
+                panel_id = f"v2_p{page_index}_{panel_index}"
+                panels.append(
+                    {
+                        "panel_id": panel_id,
+                        "purpose": "setup" if panel_index == 0 else "payoff",
+                        "story_beat": beat["dramatization"],
+                        "importance": "medium" if panel_index == 0 else "page_turn",
+                        "tempo": "hold" if page_index == 0 else "impact",
+                        "camera": {
+                            "shot": "wide" if panel_index == 0 else "close_up",
+                            "angle": "eye" if page_index == 0 else "low",
+                            "movement": "static",
+                        },
+                        "blocking": [],
+                        "prop_refs": [],
+                        "focal_regions": [],
+                        "avoid_text_regions": [],
+                        "motion": {"effects": []},
+                        "source_refs": beat["source_refs"],
+                        "source_fact_ids": beat["required_fact_ids"],
+                    }
+                )
+            pages.append(
+                {
+                    "page_id": f"v2_page_{page_index}",
+                    "page_index": page_index,
+                    "page_kind": "standard",
+                    "entry_state": f"Page {page_index} enters the selected source beat.",
+                    "exit_state": f"Page {page_index} resolves into its page-turn beat.",
+                    "page_turn_panel_id": panels[-1]["panel_id"],
+                    "panels": panels,
+                    "text_elements": [],
+                }
+            )
+        return PageScriptSet.model_validate(
+            {
+                "schema_version": "page-script-set.v1",
+                "script_set_id": "script_v2_test",
+                "project_id": plan_payload["project_id"],
+                "plan_artifact_id": plan_artifact_id,
+                "context_pack_id": context_pack_id,
+                "pages": pages,
+            }
+        ).model_dump(mode="json")
+
+    @staticmethod
+    def _thumbnail_candidate(
+        script_payload: dict[str, Any],
+        *,
+        script_artifact_id: str,
+    ) -> dict[str, Any]:
+        script = PageScriptSet.model_validate(script_payload)
+        canvas = {
+            "width_px": 1600,
+            "height_px": 2400,
+            "trim": {"x": 0.03, "y": 0.02, "width": 0.94, "height": 0.96},
+            "safe": {"x": 0.06, "y": 0.05, "width": 0.88, "height": 0.9},
+            "bleed_pct": 0.02,
+        }
+        page_plans: list[MangaPagePlan] = []
+        for page in script.pages:
+            first, second = (panel.panel_id for panel in page.panels)
+            layout_root: dict[str, Any]
+            if page.page_index == 0:
+                layout_root = {
+                    "kind": "split",
+                    "node_id": "v2_vertical_root",
+                    "axis": "y",
+                    "ratios": [0.4, 0.6],
+                    "gutter": {"value": 0.012, "unit": "page_pct"},
+                    "children": [
+                        {"kind": "panel", "node_id": "v2_top", "panel_id": first},
+                        {"kind": "panel", "node_id": "v2_bottom", "panel_id": second},
+                    ],
+                }
+            else:
+                layout_root = {
+                    "kind": "split",
+                    "node_id": "v2_horizontal_root",
+                    "axis": "x",
+                    "ratios": [0.45, 0.55],
+                    "gutter": {"value": 0.012, "unit": "page_pct"},
+                    "angle_deg": -6,
+                    "children": [
+                        {"kind": "panel", "node_id": "v2_left", "panel_id": second},
+                        {"kind": "panel", "node_id": "v2_right", "panel_id": first},
+                    ],
+                }
+            page_plans.append(
+                MangaPagePlan.model_validate(
+                    {
+                        "schema_version": "manga-page-plan.v1",
+                        "page_plan_id": f"v2_plan_{page.page_index}",
+                        "project_id": script.project_id,
+                        "script_set_artifact_id": script_artifact_id,
+                        "canvas": canvas,
+                        "reading_direction": "rtl",
+                        "page_script": page.model_dump(mode="json"),
+                        "layout_root": layout_root,
+                        "reading_edges": [
+                            {
+                                "from_panel_id": first,
+                                "to_panel_id": second,
+                                "reason": "setup to page-turn payoff",
+                            }
+                        ],
+                        "source_fact_ids": sorted(
+                            {
+                                fact_id
+                                for panel in page.panels
+                                for fact_id in panel.source_fact_ids
+                            }
+                        ),
+                    }
+                )
+            )
+        return ThumbnailSet(
+            schema_version="thumbnail-set.v1",
+            thumbnail_set_id="thumbnail_v2_test",
+            project_id=script.project_id,
+            script_set_artifact_id=script_artifact_id,
+            page_plans=page_plans,
+        ).model_dump(mode="json")
 
 
 class FakeImageProvider:
@@ -510,7 +741,7 @@ class InvalidCandidateAgent:
             candidate={"schema_version": "manga-plan.v1", "unexpected": True},
             trace={
                 "provider": "minimax",
-                "model": "MiniMax-M3",
+                "model": "MiniMax-M2.7-highspeed",
                 "skill_hash": "d" * 64,
                 "tokens": {},
                 "latency_ms": 10,
@@ -595,7 +826,7 @@ def test_workflow_completes_accepted_pages_memory_and_is_idempotent(
     plan = next(item for item in accepted if item.kind == "manga_plan")
     assert plan.model_receipt is not None
     assert plan.model_receipt["provider"] == "minimax"
-    assert plan.model_receipt["model"] == "MiniMax-M3"
+    assert plan.model_receipt["model"] == "MiniMax-M2.7-highspeed"
     assert plan.model_receipt["latency_ms"] == 50
     assert plan.model_receipt["attempt"] == 1
     assert plan.parent_artifact_ids[1].startswith("candidate_manga_plan_")
@@ -663,6 +894,105 @@ def test_workflow_completes_accepted_pages_memory_and_is_idempotent(
     corrupt_reader = client.get(f"/books/{_book_id}/manga/{project_id}/reader")
     assert corrupt_reader.status_code == 422
     assert corrupt_reader.json()["error"]["code"] == "artifact_validation_failed"
+
+
+def test_v2_workflow_resumes_through_accepted_svg_previews_without_images(
+    tmp_path: Path,
+) -> None:
+    repository = InMemoryRepositories()
+    _book_id, project_id, scope_id, _ = seed_pdf_project(repository, tmp_path)
+    run = generation_run(repository, project_id, scope_id)
+    run.pipeline_version = "manga-page-dsl.v2"
+    repository.runs[run.run_id] = run
+    image_provider = FakeImageProvider()
+    interrupted_agent = BrokeredV2FakeAgent(
+        repository,
+        media_root=tmp_path,
+        fail_thumbnail_once=True,
+    )
+
+    first = resolve(
+        GenerationWorkflowService(
+            repository,
+            agent_worker=interrupted_agent,
+            agentic_enabled=True,
+            image_provider=image_provider,
+            media_root=tmp_path,
+        ).execute(run.run_id)
+    )
+
+    assert first.status == "retryable_failed"
+    assert first.error_code == "AGENT_WORKER_FAILED"
+    assert interrupted_agent.goal_calls == [
+        AgentGoalType.MANGA_DIRECTION,
+        AgentGoalType.MANGA_PAGE_WRITING,
+        AgentGoalType.MANGA_THUMBNAIL,
+    ]
+
+    resumed_agent = BrokeredV2FakeAgent(repository, media_root=tmp_path)
+    fresh_workflow = GenerationWorkflowService(
+        repository,
+        agent_worker=resumed_agent,
+        agentic_enabled=True,
+        image_provider=image_provider,
+        media_root=tmp_path,
+    )
+    resumed = resolve(fresh_workflow.execute(run.run_id))
+    repeated = resolve(fresh_workflow.execute(run.run_id))
+    artifacts = resolve(repository.list_artifacts(run.run_id, accepted_only=False))
+    stages = resolve(repository.list_stages(run.run_id))
+
+    assert resumed.status == "succeeded"
+    assert repeated == resumed
+    assert resumed_agent.goal_calls == [AgentGoalType.MANGA_THUMBNAIL]
+    assert image_provider.calls == 0
+    assert not any(
+        artifact.kind in {"asset_request_set", "image_attempt", "image_asset", "asset_set"}
+        for artifact in artifacts
+    )
+    contexts = [artifact for artifact in artifacts if artifact.kind == "context_pack"]
+    context_purposes = {
+        artifact.content["purpose"]
+        for artifact in contexts
+        if artifact.content is not None
+    }
+    assert context_purposes == {
+        "manga_direction",
+        "manga_page_writing",
+        "manga_thumbnail",
+    }
+    planning_contexts = [
+        artifact
+        for artifact in contexts
+        if artifact.content is not None
+        and artifact.content["purpose"] in {"manga_page_writing", "manga_thumbnail"}
+    ]
+    assert all(artifact.parent_artifact_ids for artifact in planning_contexts)
+    assert sum(artifact.kind == "compiled_layout" for artifact in artifacts) == 2
+    assert sum(artifact.kind == "thumbnail_preview" for artifact in artifacts) == 2
+    assert sum(artifact.kind == "validation_report" for artifact in artifacts) == 1
+    accepted_script = next(
+        artifact
+        for artifact in artifacts
+        if artifact.artifact_id.startswith("accepted_page_script_set_")
+    )
+    accepted_thumbnail = next(
+        artifact
+        for artifact in artifacts
+        if artifact.artifact_id.startswith("accepted_thumbnail_set_")
+    )
+    assert accepted_script.model_receipt is not None
+    assert accepted_thumbnail.model_receipt is not None
+    assert accepted_script.model_receipt["model"] == "MiniMax-M2.7-highspeed"
+    assert accepted_thumbnail.model_receipt["model"] == "MiniMax-M2.7-highspeed"
+    assert all(
+        stage.status == "succeeded"
+        for stage in stages
+        if stage.stage_name != "manga_thumbnail" or stage.attempt == 2
+    )
+    thumbnail_stage = next(stage for stage in stages if stage.stage_name == "manga_thumbnail")
+    assert thumbnail_stage.status == "succeeded"
+    assert thumbnail_stage.attempt == 2
 
 
 def test_missing_image_credential_is_retryable_and_does_not_replay_manga_direction(

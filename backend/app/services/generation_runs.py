@@ -28,6 +28,7 @@ from .errors import InvalidRunStateError, NotFoundError
 from .hashing import content_hash
 
 RequestedOutput = Literal["manga", "reels", "reel_render"]
+PipelineVersion = Literal["manga-pipeline.v1", "manga-page-dsl.v2"]
 
 
 def default_requested_outputs() -> list[RequestedOutput]:
@@ -41,7 +42,7 @@ class StartGenerationRun(BaseModel):
     requested_outputs: list[RequestedOutput] = Field(
         default_factory=default_requested_outputs, min_length=1, max_length=3
     )
-    pipeline_version: str = Field(default="manga-pipeline.v1", min_length=1, max_length=500)
+    pipeline_version: PipelineVersion = "manga-pipeline.v1"
     budget: GenerationBudget
     created_by: str = Field(min_length=1, max_length=128)
 
@@ -212,6 +213,7 @@ def artifact_contract(doc: ArtifactDoc) -> Artifact:
             "artifact_id": doc.artifact_id,
             "project_id": doc.project_id,
             "run_id": doc.run_id,
+            "stage_run_id": doc.stage_run_id,
             "kind": doc.kind,
             "schema_version": doc.schema_version,
             "content": doc.content,

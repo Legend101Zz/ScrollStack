@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import logging
+from copy import deepcopy
 from pathlib import Path
 from typing import cast
 
 from pydantic import JsonValue, ValidationError
 
 from app.contracts.context import ContextPack
-from app.contracts.manga import MangaPagePlan, PageScriptSet, ThumbnailSet
+from app.contracts.manga import MangaPagePlan, PageScript, PageScriptSet, ThumbnailSet
 from app.persistence.protocols import ArtifactRepository, RunRepository
 
 from .domain_tools import (
@@ -22,6 +24,8 @@ from .hashing import binary_content_hash
 from .manga_layout import LayoutCompilationError, compile_page_layout, render_thumbnail_svg
 from .manga_page_planning import MangaPagePlanningService
 from .manga_validation import validate_page_plan
+
+logger = logging.getLogger(__name__)
 
 
 class MangaPlanningToolService:
@@ -72,9 +76,17 @@ class MangaPlanningToolService:
         if tool_name == "list_relevant_assets":
             return self._list_relevant_assets(context, request.arguments)
         if tool_name == "validate_layout_draft":
-            return self._validate_layout_draft(request.scope, request.arguments)
+            return await self._validate_layout_draft(
+                request.scope,
+                context,
+                request.arguments,
+            )
         if tool_name == "submit_thumbnail_set":
-            return await self._submit_thumbnail_set(request.scope, request.arguments)
+            return await self._submit_thumbnail_set(
+                request.scope,
+                context,
+                request.arguments,
+            )
         return self._report_blocker("Thumbnail", request.arguments)
 
     async def _authorized_context(
@@ -97,6 +109,8 @@ class MangaPlanningToolService:
             raise AuthorizationError("Agent tool is not authorized for this stage")
         if stage.status not in {"running", "validating", "repairing"}:
             raise AuthorizationError("Agent tool stage is not active")
+        if scope.context_pack_id not in stage.input_artifact_ids:
+            raise AuthorizationError("ContextPack is not authorized as an input to this stage")
         artifact = await self._artifacts.get_artifact(scope.context_pack_id)
         if (
             artifact is None
@@ -113,6 +127,22 @@ class MangaPlanningToolService:
             raise ArtifactValidationError("Persisted ContextPack is invalid") from error
         if context.context_pack_id != scope.context_pack_id:
             raise AuthorizationError("ContextPack identity does not match tool scope")
+        if context.purpose != stage_name:
+            raise AuthorizationError("ContextPack purpose does not authorize this planning goal")
+        for parent_ref in context.parent_artifacts:
+            parent = await self._artifacts.get_artifact(parent_ref.artifact_id)
+            if (
+                parent is None
+                or parent.project_id != scope.project_id
+                or parent.run_id != scope.run_id
+                or parent.validation_status != "accepted"
+                or parent.kind != parent_ref.kind.value
+                or parent.schema_version != parent_ref.schema_version
+                or parent.content_hash != parent_ref.content_hash
+            ):
+                raise AuthorizationError(
+                    f"ContextPack parent {parent_ref.artifact_id} is outside accepted run lineage"
+                )
         return context
 
     @staticmethod
@@ -149,8 +179,10 @@ class MangaPlanningToolService:
         arguments: dict[str, JsonValue],
     ) -> DomainToolResponse:
         artifact_ids = arguments.get("artifact_ids")
-        if not isinstance(artifact_ids, list) or not artifact_ids or any(
-            not isinstance(item, str) for item in artifact_ids
+        if (
+            not isinstance(artifact_ids, list)
+            or not artifact_ids
+            or any(not isinstance(item, str) for item in artifact_ids)
         ):
             raise ArtifactValidationError("artifact_ids must be a non-empty string array")
         if len(artifact_ids) > 20:
@@ -198,6 +230,7 @@ class MangaPlanningToolService:
             stage_run_id=scope.stage_run_id,
             plan_artifact_id=script_set.plan_artifact_id,
             script_set=script_set,
+            context_pack_id=scope.context_pack_id,
         )
         return DomainToolResponse(
             content="PageScriptSet validated and durably accepted.",
@@ -252,9 +285,7 @@ class MangaPlanningToolService:
             for state in context.continuity.character_state
         }
         allowed = (
-            set().union(*(known.get(item, set()) for item in requested))
-            if requested
-            else set()
+            set().union(*(known.get(item, set()) for item in requested)) if requested else set()
         )
         assets = [
             item.model_dump(mode="json")
@@ -266,17 +297,44 @@ class MangaPlanningToolService:
             data={"assets": assets},
         )
 
-    @staticmethod
-    def _validate_layout_draft(
+    async def _validate_layout_draft(
+        self,
         scope: DomainToolScope,
+        context: ContextPack,
         arguments: dict[str, JsonValue],
     ) -> DomainToolResponse:
         raw = arguments.get("page_plan")
         if not isinstance(raw, dict):
             raise ArtifactValidationError("page_plan must be an object")
+        normalized = deepcopy(raw)
+        if "page_script" not in normalized:
+            script_set_artifact_id = arguments.get("script_set_artifact_id")
+            page_index = arguments.get("page_index")
+            if not isinstance(script_set_artifact_id, str) or not isinstance(page_index, int):
+                raise ArtifactValidationError(
+                    "script_set_artifact_id and page_index are required when page_script is omitted"
+                )
+            script_set = await self._authorized_script_set(
+                scope,
+                context,
+                script_set_artifact_id,
+            )
+            if page_index >= len(script_set.pages):
+                raise ArtifactValidationError("page_index is outside the accepted PageScriptSet")
+            normalized = self._normalize_page_plan(
+                normalized,
+                page_script=script_set.pages[page_index],
+                project_id=scope.project_id,
+                script_set_artifact_id=script_set_artifact_id,
+            )
         try:
-            plan = MangaPagePlan.model_validate(raw)
+            plan = MangaPagePlan.model_validate(normalized)
         except ValidationError as error:
+            logger.warning(
+                "MangaPagePlan draft rejected for stage %s: %s",
+                scope.stage_run_id,
+                error.errors(include_input=False),
+            )
             raise ArtifactValidationError(f"MangaPagePlan validation failed: {error}") from error
         if plan.project_id != scope.project_id:
             raise AuthorizationError("MangaPagePlan crosses project ownership")
@@ -298,6 +356,7 @@ class MangaPlanningToolService:
                 "passed": not any(issue.severity == "error" for issue in issues),
                 "compiler_hash": compiled.compiler_hash,
                 "compiled_layout": compiled.model_dump(mode="json"),
+                "normalized_page_plan": plan.model_dump(mode="json"),
                 "preview_svg": svg,
                 "preview_hash": binary_content_hash(svg.encode("utf-8")),
                 "issues": [issue.model_dump(mode="json") for issue in issues],
@@ -307,13 +366,44 @@ class MangaPlanningToolService:
     async def _submit_thumbnail_set(
         self,
         scope: DomainToolScope,
+        context: ContextPack,
         arguments: dict[str, JsonValue],
     ) -> DomainToolResponse:
         raw = arguments.get("thumbnail_set")
         if not isinstance(raw, dict):
             raise ArtifactValidationError("thumbnail_set must be an object")
+        normalized = deepcopy(raw)
+        normalized["project_id"] = scope.project_id
+        script_set_artifact_id = normalized.get("script_set_artifact_id")
+        raw_plans = normalized.get("page_plans")
+        if isinstance(script_set_artifact_id, str) and isinstance(raw_plans, list):
+            script_set = await self._authorized_script_set(
+                scope,
+                context,
+                script_set_artifact_id,
+            )
+            hydrated_plans: list[JsonValue] = []
+            for raw_plan in raw_plans:
+                if not isinstance(raw_plan, dict):
+                    hydrated_plans.append(raw_plan)
+                    continue
+                plan = deepcopy(raw_plan)
+                page_index = plan.pop("page_index", None)
+                if "page_script" not in plan:
+                    if not isinstance(page_index, int) or page_index >= len(script_set.pages):
+                        raise ArtifactValidationError(
+                            "Each page plan without page_script requires a valid page_index"
+                        )
+                    plan = self._normalize_page_plan(
+                        plan,
+                        page_script=script_set.pages[page_index],
+                        project_id=scope.project_id,
+                        script_set_artifact_id=script_set_artifact_id,
+                    )
+                hydrated_plans.append(plan)
+            normalized["page_plans"] = hydrated_plans
         try:
-            thumbnail_set = ThumbnailSet.model_validate(raw)
+            thumbnail_set = ThumbnailSet.model_validate(normalized)
         except ValidationError as error:
             raise ArtifactValidationError(f"ThumbnailSet validation failed: {error}") from error
         result = await self._planning.submit_thumbnail_set(
@@ -341,6 +431,99 @@ class MangaPlanningToolService:
             },
             candidate=thumbnail_set.model_dump(mode="json"),
         )
+
+    async def _authorized_script_set(
+        self,
+        scope: DomainToolScope,
+        context: ContextPack,
+        artifact_id: str,
+    ) -> PageScriptSet:
+        if artifact_id not in {item.artifact_id for item in context.parent_artifacts}:
+            raise AuthorizationError("PageScriptSet is not an accepted ContextPack parent")
+        artifact = await self._artifacts.get_artifact(artifact_id)
+        if (
+            artifact is None
+            or artifact.project_id != scope.project_id
+            or artifact.run_id != scope.run_id
+            or artifact.kind != "page_script_set"
+            or artifact.validation_status != "accepted"
+            or artifact.content is None
+        ):
+            raise AuthorizationError("PageScriptSet is outside accepted run lineage")
+        try:
+            return PageScriptSet.model_validate(artifact.content)
+        except ValidationError as error:
+            raise ArtifactValidationError("Accepted PageScriptSet content is invalid") from error
+
+    @staticmethod
+    def _normalize_page_plan(
+        raw: dict[str, JsonValue],
+        *,
+        page_script: PageScript,
+        project_id: str,
+        script_set_artifact_id: str,
+    ) -> dict[str, JsonValue]:
+        normalized = deepcopy(raw)
+        normalized["schema_version"] = "manga-page-plan.v1"
+        normalized["project_id"] = project_id
+        normalized["script_set_artifact_id"] = script_set_artifact_id
+        normalized["page_script"] = page_script.model_dump(mode="json")
+        normalized["reading_direction"] = "rtl"
+        normalized["source_fact_ids"] = []
+
+        canvas = normalized.get("canvas")
+        if isinstance(canvas, dict):
+            for box_name in ("trim", "safe"):
+                box = canvas.get(box_name)
+                if isinstance(box, dict):
+                    box.pop("unit", None)
+
+        layout = normalized.get("layout_root")
+        panels = page_script.panels
+        if len(panels) == 2 and isinstance(layout, dict) and layout.get("kind") == "split":
+            children = layout.get("children")
+            if (
+                isinstance(children, list)
+                and len(children) == 2
+                and all(isinstance(child, dict) for child in children)
+            ):
+                later, earlier = panels[1].panel_id, panels[0].panel_id
+                child_nodes = cast(list[dict[str, JsonValue]], children)
+                child_nodes[0]["panel_id"] = later
+                child_nodes[1]["panel_id"] = earlier
+                normalized["reading_edges"] = [
+                    {
+                        "from_panel_id": earlier,
+                        "to_panel_id": later,
+                        "reason": "RTL page-turn progression",
+                    }
+                ]
+        elif len(panels) == 2 and isinstance(layout, dict) and layout.get("kind") == "overlay":
+            base = layout.get("base")
+            insets = layout.get("insets")
+            if (
+                isinstance(base, dict)
+                and isinstance(insets, list)
+                and len(insets) == 1
+                and isinstance(insets[0], dict)
+                and isinstance(insets[0].get("node"), dict)
+            ):
+                earlier, later = panels[0].panel_id, panels[1].panel_id
+                base["panel_id"] = earlier
+                inset = insets[0]
+                inset_node = cast(dict[str, JsonValue], inset["node"])
+                inset_node["panel_id"] = later
+                normalized["reading_edges"] = [
+                    {
+                        "from_panel_id": earlier,
+                        "to_panel_id": later,
+                        "reason": "RTL page-turn progression",
+                    }
+                ]
+        elif len(panels) == 1 and isinstance(layout, dict) and layout.get("kind") == "panel":
+            layout["panel_id"] = panels[0].panel_id
+            normalized["reading_edges"] = []
+        return normalized
 
     @staticmethod
     def _report_blocker(
