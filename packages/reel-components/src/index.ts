@@ -10,6 +10,7 @@ export {
   type SafeZonePolicy,
 } from "./catalog";
 export { compileReel } from "./compile";
+export { deriveReelSpecs, type DeriveReelSpecsOptions } from "./derive-reel-specs";
 export { previewCompiledReel, previewMangaManifest, previewReelCompilationInput, previewReelSpec } from "./preview-fixture";
 export { reelComponentRegistry, type ReelSceneRenderer } from "./registry";
 export type { SceneRendererProps } from "./scenes/shared";
