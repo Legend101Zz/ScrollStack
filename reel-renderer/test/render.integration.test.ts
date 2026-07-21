@@ -8,6 +8,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { getOrCreateReelBundle } from "../src/remotion-bundle";
 import { createReelRender } from "../src/render-media";
+import { renderReelWithReceipt } from "../src/render-receipt";
 import { renderReelStill } from "../src/render-still";
 
 const runIntegration = process.env.SCROLLSTACK_RENDER_INTEGRATION === "1";
@@ -112,5 +113,31 @@ describe.skipIf(!runIntegration)("Remotion reel rendering", () => {
     // The MP4 container may include a few AAC priming/padding samples beyond
     // the exact 390-frame video timeline.
     expect(Math.abs(encodedDurationSeconds - expectedDurationSeconds)).toBeLessThanOrEqual(0.1);
+  }, 300_000);
+
+  it("produces a passing RenderReceipt with a poster frame", async () => {
+    const outputLocation = path.join(outputRoot, "receipt.mp4");
+    const { receipt } = await renderReelWithReceipt({
+      input: previewReelCompilationInput,
+      outputLocation,
+      concurrency: 1,
+      browserExecutable,
+      ffprobeExecutable,
+      renderId: "render_fixed_for_test",
+    });
+
+    expect(receipt.validationReport.passed).toBe(true);
+    expect(receipt).toMatchObject({
+      renderId: "render_fixed_for_test",
+      reelId: previewReelCompilationInput.spec.reel_id,
+      codec: "h264",
+      width: 1080,
+      height: 1920,
+      fps: 30,
+      durationMs: 13_000,
+    });
+    expect(receipt.reelSpecHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(receipt.outputBytes).toBeGreaterThan(0);
+    expect((await stat(receipt.thumbnailStorageRef)).size).toBeGreaterThan(0);
   }, 300_000);
 });

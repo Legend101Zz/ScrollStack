@@ -71,6 +71,62 @@ export type ReelStillRenderResult = Readonly<{
   height: 1920;
 }>;
 
+export type ProbedMedia = Readonly<{
+  videoCodec?: string;
+  audioCodec?: string;
+  width?: number;
+  height?: number;
+  fps?: number;
+  audioSampleRate?: number;
+  durationSeconds?: number;
+}>;
+
+export type RenderValidationCheck = Readonly<{
+  name: string;
+  passed: boolean;
+  detail: string;
+}>;
+
+export type RenderValidationReport = Readonly<{
+  passed: boolean;
+  checks: readonly RenderValidationCheck[];
+}>;
+
+// ponytail: local shape until the canonical Pydantic RenderReceipt lands. Field
+// names match technical-imp.md 13.6 so the contract can adopt them verbatim.
+export type RenderReceipt = Readonly<{
+  renderId: string;
+  reelId: string;
+  reelSpecHash: string;
+  rendererVersion: string;
+  componentVersions: Readonly<Record<string, string>>;
+  outputStorageRef: string;
+  thumbnailStorageRef: string;
+  codec: string;
+  width: number;
+  height: number;
+  fps: number;
+  durationMs: number;
+  outputBytes: number;
+  renderTimeMs: number;
+  validationReport: RenderValidationReport;
+}>;
+
+export type ReelReceiptRenderOptions = ReelMediaRenderOptions &
+  Readonly<{
+    thumbnailLocation?: string;
+    posterFrame?: number;
+    ffprobeExecutable?: string;
+    renderId?: string;
+  }>;
+
+export type ReelReceiptRenderResult = Readonly<{
+  receipt: RenderReceipt;
+  media: ReelRenderResult;
+  still: ReelStillRenderResult;
+  probe: ProbedMedia;
+}>;
+
 export type LocalReelAssetSource = Readonly<{
   assetId: string;
   contentHash: string;
