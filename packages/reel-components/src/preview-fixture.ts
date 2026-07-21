@@ -11,8 +11,82 @@ const sourceRef = {
   text_hash: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 } as const;
 
-function panelAsset(assetId: string, color: string, label: string): ResolvedReelAsset {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920"><rect width="1080" height="1920" fill="${color}"/><path d="M0 1450 L1080 730 L1080 1920 L0 1920Z" fill="#16100c"/><text x="540" y="870" text-anchor="middle" fill="#fbf5e9" font-family="Arial" font-size="92" font-weight="700">${label}</text></svg>`;
+const PAPER = "#efe7d7";
+const INK = "#14100c";
+
+/** Radiating speed lines, the manga shorthand for focus and momentum. */
+function speedLines(cx: number, cy: number, count: number, inner: number, outer: number): string {
+  return Array.from({ length: count }, (_, index) => {
+    const angle = (index / count) * Math.PI * 2 + (index % 2) * 0.04;
+    const width = index % 3 === 0 ? 15 : 7;
+    const x1 = cx + Math.cos(angle) * inner;
+    const y1 = cy + Math.sin(angle) * inner;
+    const x2 = cx + Math.cos(angle) * outer;
+    const y2 = cy + Math.sin(angle) * outer;
+    return `<path d="M${x1.toFixed(0)} ${y1.toFixed(0)} L${(x2 - width).toFixed(0)} ${y2.toFixed(0)} L${(x2 + width).toFixed(0)} ${y2.toFixed(0)}Z" fill="${INK}"/>`;
+  }).join("");
+}
+
+/** Diagonal ink hatching, used where a flat fill would read as empty. */
+function hatching(x: number, y: number, w: number, h: number, step: number): string {
+  return Array.from({ length: Math.ceil((w + h) / step) }, (_, index) => {
+    const offset = index * step;
+    return `<path d="M${x + offset} ${y} L${x + offset - h} ${y + h}" stroke="${INK}" stroke-width="3" fill="none"/>`;
+  }).join("");
+}
+
+/**
+ * Original artwork drawn in code: solid ink shapes only, because the inline-SVG
+ * guard in the renderer rejects `url(` pattern and gradient references. Shading
+ * comes from hatching here and from the Screentone overlay at render time.
+ */
+function mangaArt(variant: "figure" | "impact" | "vista" | "closeup"): string {
+  switch (variant) {
+    case "figure":
+      // Lone silhouette against a low horizon, weight on the lower third.
+      return [
+        `<rect width="1080" height="1920" fill="${PAPER}"/>`,
+        hatching(0, 0, 1080, 820, 26),
+        `<path d="M0 1180 L1080 980 L1080 1920 L0 1920Z" fill="${INK}"/>`,
+        `<ellipse cx="540" cy="700" rx="150" ry="150" fill="${INK}"/>`,
+        `<path d="M470 830 L610 830 L660 1240 L420 1240Z" fill="${INK}"/>`,
+        `<path d="M470 850 L360 1120 L410 1150 L500 900Z" fill="${INK}"/>`,
+        `<path d="M610 850 L720 1120 L670 1150 L580 900Z" fill="${INK}"/>`,
+      ].join("");
+    case "impact":
+      // Full-bleed burst: the panel that lands on a cut. Lines must be ink on
+      // paper — ink on ink renders as an empty black frame.
+      return [
+        `<rect width="1080" height="1920" fill="${PAPER}"/>`,
+        speedLines(540, 960, 44, 210, 1600),
+        `<circle cx="540" cy="960" r="200" fill="${INK}"/>`,
+        `<circle cx="540" cy="960" r="150" fill="${PAPER}"/>`,
+      ].join("");
+    case "vista":
+      // Wide establishing shot: layered ridges receding into tone.
+      return [
+        `<rect width="1080" height="1920" fill="${PAPER}"/>`,
+        `<circle cx="760" cy="520" r="190" fill="${INK}"/>`,
+        `<circle cx="700" cy="470" r="190" fill="${PAPER}"/>`,
+        `<path d="M0 1060 L300 820 L520 1010 L760 760 L1080 1030 L1080 1300 L0 1300Z" fill="${INK}"/>`,
+        hatching(0, 1300, 1080, 320, 30),
+        `<path d="M0 1620 L1080 1500 L1080 1920 L0 1920Z" fill="${INK}"/>`,
+      ].join("");
+    case "closeup":
+      // Eye in shadow: the reaction beat.
+      return [
+        `<rect width="1080" height="1920" fill="${INK}"/>`,
+        `<path d="M140 960 Q540 620 940 960 Q540 1300 140 960Z" fill="${PAPER}"/>`,
+        `<circle cx="540" cy="960" r="185" fill="${INK}"/>`,
+        `<circle cx="600" cy="900" r="52" fill="${PAPER}"/>`,
+        hatching(140, 640, 800, 300, 22),
+        `<path d="M120 720 Q540 460 960 720" stroke="${INK}" stroke-width="26" fill="none"/>`,
+      ].join("");
+  }
+}
+
+function panelAsset(assetId: string, variant: Parameters<typeof mangaArt>[0]): ResolvedReelAsset {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920">${mangaArt(variant)}</svg>`;
   return {
     assetId,
     contentHash: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
@@ -210,10 +284,10 @@ export const previewReelSpec = {
 } satisfies ReelSpec;
 
 const previewAssets = Object.freeze({
-  asset_panel_preview_1: panelAsset("asset_panel_preview_1", "#9f2815", "THE MAP"),
-  asset_panel_preview_2: panelAsset("asset_panel_preview_2", "#665642", "THE WARNING"),
-  asset_panel_preview_3: panelAsset("asset_panel_preview_3", "#d93b22", "THE CHOICE"),
-  asset_panel_preview_4: panelAsset("asset_panel_preview_4", "#211812", "THE OBSERVATORY"),
+  asset_panel_preview_1: panelAsset("asset_panel_preview_1", "vista"),
+  asset_panel_preview_2: panelAsset("asset_panel_preview_2", "figure"),
+  asset_panel_preview_3: panelAsset("asset_panel_preview_3", "impact"),
+  asset_panel_preview_4: panelAsset("asset_panel_preview_4", "closeup"),
 });
 
 export const previewReelCompilationInput: ReelCompilationInput = Object.freeze({

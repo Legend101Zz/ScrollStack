@@ -30,24 +30,60 @@ export function getPanelAsset(
   return getAsset(compiled, assetId);
 }
 
+/**
+ * Printed manga is pure ink on paper, not a sepia photograph. Full grayscale
+ * with lifted contrast reads as inked linework; the previous partial grayscale
+ * plus sepia left every panel a muddy brown.
+ */
+const MANGA_INK_FILTER = "grayscale(1) contrast(1.42) brightness(1.06)";
+
+/**
+ * Screentone. Real manga shades with printed dot rasters, so the tone belongs to
+ * the page rather than to the artwork: it is a fixed overlay and deliberately
+ * does not scale or pan with the camera. Built from a CSS gradient because our
+ * own inline-SVG guard forbids `url(` references, and because this then applies
+ * to generated panels too, not just fixtures.
+ */
+export function Screentone({ opacity = 0.22 }: Readonly<{ opacity?: number }>) {
+  return (
+    <div
+      style={{
+        position: "absolute",
+        inset: 0,
+        backgroundImage:
+          "radial-gradient(circle at 50% 50%, rgba(13, 10, 8, 0.9) 1.1px, transparent 1.2px)",
+        backgroundSize: "7px 7px",
+        mixBlendMode: "multiply",
+        opacity,
+        pointerEvents: "none",
+        zIndex: 5,
+      }}
+    />
+  );
+}
+
 export function PanelImage({
   asset,
   style,
-}: Readonly<{ asset: ResolvedReelAsset; style?: React.CSSProperties }>) {
+  tone = true,
+}: Readonly<{ asset: ResolvedReelAsset; style?: React.CSSProperties; tone?: boolean }>) {
   return (
-    <Img
-      src={asset.src}
-      alt=""
-      maxRetries={2}
-      pauseWhenLoading
-      style={{
-        width: "100%",
-        height: "100%",
-        objectFit: "cover",
-        filter: "grayscale(0.82) sepia(0.18) contrast(1.2)",
-        ...style,
-      }}
-    />
+    <>
+      <Img
+        src={asset.src}
+        alt=""
+        maxRetries={2}
+        pauseWhenLoading
+        style={{
+          width: "100%",
+          height: "100%",
+          objectFit: "cover",
+          filter: MANGA_INK_FILTER,
+          ...style,
+        }}
+      />
+      {tone ? <Screentone /> : null}
+    </>
   );
 }
 
