@@ -211,6 +211,33 @@ class ArtifactDoc(Document):
                 [("project_id", ASCENDING), ("kind", ASCENDING), ("created_at", DESCENDING)],
                 name="ix_artifact_project_kind_created",
             ),
+            IndexModel(
+                [
+                    ("project_id", ASCENDING),
+                    ("kind", ASCENDING),
+                    ("validation_status", ASCENDING),
+                    ("content.series_id", ASCENDING),
+                    ("content.sequence", ASCENDING),
+                ],
+                name="ix_artifact_reel_project_catalog",
+            ),
+            IndexModel(
+                [
+                    ("kind", ASCENDING),
+                    ("validation_status", ASCENDING),
+                    ("content.series_id", ASCENDING),
+                    ("content.sequence", ASCENDING),
+                ],
+                name="ix_artifact_reel_series_sequence",
+            ),
+            IndexModel(
+                [
+                    ("kind", ASCENDING),
+                    ("validation_status", ASCENDING),
+                    ("content.reel_id", ASCENDING),
+                ],
+                name="ix_artifact_reel_id",
+            ),
             IndexModel([("content_hash", ASCENDING)], name="ix_artifact_content_hash"),
         ]
 

@@ -16,6 +16,7 @@ from app.services.manga_reader import MangaReaderService
 from app.services.page_domain_tools import MangaDomainToolService
 from app.services.pdf_ingestion import PdfIngestionService
 from app.services.projects import MangaProjectService
+from app.services.reels import ReelPlayerService
 from app.services.scopes import ScopeService
 
 
@@ -26,6 +27,7 @@ class ControlPlaneServices:
     scopes: ScopeService
     generation_runs: GenerationRunService
     domain_tools: MangaDomainToolService
+    reels: ReelPlayerService
     manga_reader: MangaReaderService
     manga_editions: MangaEditionService
 
@@ -59,6 +61,12 @@ def build_services(
             repositories,
             repositories,
             media_root=media_root,
+        ),
+        reels=ReelPlayerService(
+            repositories,
+            repositories,
+            repositories,
+            repositories,
         ),
         manga_reader=MangaReaderService(repositories, media_root=media_root),
         manga_editions=MangaEditionService(repositories, media_root=media_root),

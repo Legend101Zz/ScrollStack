@@ -55,14 +55,19 @@ cross-language data seam.
 
 ## Git and worktree workflow
 
-- `main` is the protected integration branch. Do not develop directly on it.
+- `main` is the protected release branch. Do not develop or integrate directly
+  on it.
+- `dev` is the shared integration branch. Merge reviewed feature branches into
+  `dev`, then promote `dev` to `main` through one final PR when both owners are
+  ready.
 - Use one worktree per lane:
   - Mrigesh: `codex/manga-context-control-plane` in `../ScrollStack-manga`.
   - Reel player: `codex/pi-reel-player` in `../ScrollStack-reel`.
 - Keep uncommitted work inside your own worktree. Rebase on current `main`
-  immediately before opening a PR.
-- Merge through focused PRs only. Resolve conflicts in files you own; ask
-  Mrigesh to coordinate conflicts in shared paths.
+  only when preparing the final `dev` to `main` promotion. Feature branches
+  should start from and rebase on current `dev` before opening their PRs.
+- Merge feature work into `dev` through focused PRs only. Resolve conflicts in
+  files you own; ask Mrigesh to coordinate conflicts in shared paths.
 - Do not bundle refactors from the other lane into your PR.
 
 ## Integration order

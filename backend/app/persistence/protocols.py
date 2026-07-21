@@ -11,6 +11,7 @@ from .documents import (
     MangaProjectDoc,
     ProjectMemorySnapshotDoc,
     ScopeManifestDoc,
+    SeriesProgressDoc,
     SourceUnitDoc,
     StageRunDoc,
 )
@@ -71,6 +72,26 @@ class ArtifactRepository(Protocol):
     async def list_artifacts(self, run_id: str, *, accepted_only: bool) -> list[ArtifactDoc]: ...
 
 
+class ReelReadRepository(Protocol):
+    async def list_accepted_reel_specs(self, project_id: str) -> list[ArtifactDoc]: ...
+
+    async def list_accepted_reel_specs_for_series(
+        self, series_id: str
+    ) -> list[ArtifactDoc]: ...
+
+    async def get_accepted_reel_spec(self, reel_id: str) -> ArtifactDoc | None: ...
+
+
+class SeriesProgressRepository(Protocol):
+    async def get_series_progress(
+        self, user_id: str, series_id: str
+    ) -> SeriesProgressDoc | None: ...
+
+    async def save_series_progress(
+        self, progress: SeriesProgressDoc
+    ) -> SeriesProgressDoc: ...
+
+
 class RunRepository(Protocol):
     async def create_run_if_absent(
         self, run: GenerationRunDoc
@@ -103,6 +124,8 @@ class Repositories(
     ScopeRepository,
     MemoryRepository,
     ArtifactRepository,
+    ReelReadRepository,
+    SeriesProgressRepository,
     RunRepository,
     Protocol,
 ):

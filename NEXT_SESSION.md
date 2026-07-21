@@ -1,4 +1,122 @@
-# ScrollStack manga production: research and implementation handoff
+# Collaboration handoff
+
+## Working agreement
+
+- **Integration branch:** `dev` (PR-only)
+- **Release promotion:** `dev` -> `main` (final reviewed PR)
+- **Core/manga/theme owner:** Mrigesh
+- **Reel renderer/player owner:** Utkarsh
+- **Canonical seam owner:** Mrigesh (`packages/contracts/` and Pydantic exports)
+- **Architecture source:** `technical-imp.md`
+
+## Worktrees
+
+| Lane | Branch | Worktree |
+| --- | --- | --- |
+| Core, manga, contracts, theme | `codex/manga-context-control-plane` | `../ScrollStack-manga` |
+| Reel renderer and player | `codex/pi-reel-player` | `../ScrollStack-reel` |
+
+Create or refresh feature worktrees from `dev` before starting lane work. Do not
+share uncommitted files between them.
+
+## Reel player baseline — 2026-07-19 — Utkarsh — `codex/pi-reel-player`
+
+- **Completed:** Added the deterministic `compileReel()` boundary, reviewed
+  seven-scene Remotion registry, offline content-addressed asset staging,
+  cancellable H.264/AAC still/MP4 rendering, and the fixture-backed accessible
+  reel player with axis-locked navigation and adjacent-only preloading.
+- **Owned files:** `packages/reel-components/`, `reel-renderer/`,
+  `frontend/app/books/[id]/manga/[projectId]/reels/`,
+  `frontend/components/ReelFeed/`, `frontend/package.json`, and the mechanical
+  dependency update in `pnpm-lock.yaml`.
+- **Contract impact:** Consumes `manga-manifest.v1` and `reel-spec.v1`
+  unchanged; breaking impact: none.
+- **Validation:** Root checks, reel component and renderer tests, the gated
+  Chromium/FFmpeg still and MP4 run, frontend lint/build, and
+  `git diff --check` passed.
+- **Remaining integration work:** Live data, progress persistence, signed media
+  inputs, thumbnails, and persisted render receipts depend on the control-plane
+  endpoints and contracts.
+
+## Reel API consumer — 2026-07-20 — Utkarsh — `codex/reel-api-consumer`
+
+- **Completed:** Replaced the live fixture path with generated-contract-validated
+  reel discovery, player-payload, and per-series progress clients. Browser calls
+  now stay same-origin through reel-owned Next route handlers. The feed restores
+  the newest valid position, fetches and deduplicates only the current reel plus
+  the likely horizontal and vertical destinations, preloads their media, and
+  serializes full-replacement progress writes with optimistic viewed-ID unions
+  and an explicit retry state. Fixtures are available only through
+  `?fixture=1` in development; API failures never silently select demo data.
+- **Owned files changed:** `frontend/app/**/reels/`,
+  `frontend/components/ReelFeed/`, and reel consumer tests under
+  `packages/reel-components/src/`; this handoff is the only shared document
+  changed.
+- **Contract version / impact:** consumes `reel-series.v1`,
+  `reel-player-payload.v1`, `series-progress.v1`, and
+  `series-progress-update.v1` unchanged. Breaking impact: none.
+- **Validation:** frontend lint, typecheck, and production build pass;
+  reel-components typecheck passes; all 21 reel-component/consumer tests pass;
+  `git diff --check` passes. Manual Chromium checks covered 390x844 and
+  1440x1000 fixture playback plus the real-mode API failure/retry screen.
+- **Visual evidence:** current captures were checked at
+  `/tmp/scrollstack-reel-api-mobile.png`,
+  `/tmp/scrollstack-reel-api-desktop.png`, and
+  `/tmp/scrollstack-reel-api-error.png`; the committed visual baseline remains
+  `docs/evidence/dev-reel-player-mobile-2026-07-20.png` and
+  `docs/evidence/dev-reel-player-desktop-2026-07-20.png`.
+- **Current blocker:** Mrigesh's manga workflow still does not emit accepted
+  manifest/reel artifacts, so production discovery is honestly empty until
+  that lane lands. Container deployments should set `INTERNAL_API_URL` to the
+  backend service URL; changing shared Compose/env defaults remains a
+  coordinated core-lane edit.
+- **Next action / owner:** Utkarsh opens this focused PR into `dev`. Mrigesh
+  reviews it, connects accepted artifacts, and supplies the container-internal
+  API URL before the next `dev` promotion to `main`.
+
+## Current dev integration baseline — 2026-07-20 — Utkarsh on behalf of both lanes
+
+- **Completed:**
+  - Created `dev` from `origin/main` without modifying `main`.
+  - Merged Mrigesh's `codex/mrigesh-core-vertical-slice`, the additive
+    `codex/reel-api-contract`, and Utkarsh's `codex/pi-reel-player` in dependency
+    order. All merges were clean; `NEXT_SESSION.md` was the only overlapping
+    path and its separate handoffs were retained.
+  - Confirmed the combined branch exposes reel discovery/player/progress APIs
+    alongside the fixture-backed Remotion player and renderer.
+- **Files changed:** merge commits preserve each lane's owned files. This
+  integration handoff updates `AGENTS.md`, `NEXT_SESSION.md`, and adds the two
+  reel screenshots under `docs/evidence/`.
+- **Contract version / impact:** additive only. The merged branch contains
+  `manga-plan.v1`, `reel-series.v1`, `reel-player-payload.v1`,
+  `series-progress.v1`, and `series-progress-update.v1`; existing v1 contracts
+  remain compatible.
+- **Validation:** backend 57 tests passed; Ruff and strict mypy passed; all 22
+  schemas and generated TypeScript contracts are current; root `pnpm check`
+  passed; frontend lint and production build passed; Docker Compose static
+  config passed; and all 11 renderer tests passed, including the real Chromium
+  still and H.264/AAC MP4 plus ffprobe checks. `git diff --check` passed.
+- **Visual evidence:**
+  - `docs/evidence/dev-reel-player-mobile-2026-07-20.png`
+  - `docs/evidence/dev-reel-player-desktop-2026-07-20.png`
+- **Current blockers / honest gaps:**
+  - `frontend/components/ReelFeed/fixture-adapter.ts` still supplies the live
+    player. The API DTO uses snake_case and requires a small consumer adapter
+    before reload/resume progress can be proven end to end.
+  - Mrigesh's workflow intentionally stops at `MANGA_PIPELINE_NOT_CONNECTED`;
+    it does not yet emit accepted `MangaManifest` or `ReelSpec` artifacts for
+    the new read API.
+  - `storage://` media still needs a signing or delivery route; the API rejects
+    those references rather than returning unusable browser URLs.
+- **Next action / owner:**
+  1. Utkarsh replaces the fixture adapter with the merged API and persists
+     progress, retaining a fixture fallback only for isolated visual tests.
+  2. Mrigesh connects accepted manga composition/manifest output and then reel
+     generation so the API has production artifacts to serve.
+  3. Mrigesh reviews the integration PR and promotes `dev` to `main` when the
+     desired integration boundary is accepted.
+
+## Current baseline — 2026-07-21 — Mrigesh — `codex/mrigesh-core-vertical-slice`
 
 - **Investigation date:** 2026-07-21
 - **Owner/lane:** Mrigesh — core, manga, contracts, shared visual system

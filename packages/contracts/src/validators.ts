@@ -14,9 +14,13 @@ import type {
   MangaPagePlan,
   MangaPlan,
   PageScriptSet,
+  ReelPlayerPayload,
+  ReelSeries,
   ReelSpec,
   RenderedPage,
   RenderedPageV2,
+  SeriesProgress,
+  SeriesProgressUpdate,
   ThumbnailSet,
 } from "./generated/index.js";
 import { contractSchemas, type ContractName } from "./schemas.js";
@@ -213,8 +217,20 @@ export const isThumbnailSet = (value: unknown): value is ThumbnailSet =>
 export const isReelSpec = (value: unknown): value is ReelSpec =>
   validateContract("reel_spec.v1", value).valid;
 
+export const isReelPlayerPayload = (value: unknown): value is ReelPlayerPayload =>
+  validateContract("reel_player_payload.v1", value).valid;
+
+export const isReelSeries = (value: unknown): value is ReelSeries =>
+  validateContract("reel_series.v1", value).valid;
+
 export const isRenderedPage = (value: unknown): value is RenderedPage =>
   validateContract("rendered_page.v1", value).valid;
 
 export const isRenderedPageV2 = (value: unknown): value is RenderedPageV2 =>
   validateContract("rendered_page.v2", value).valid;
+
+export const isSeriesProgress = (value: unknown): value is SeriesProgress =>
+  validateContract("series_progress.v1", value).valid;
+
+export const isSeriesProgressUpdate = (value: unknown): value is SeriesProgressUpdate =>
+  validateContract("series_progress_update.v1", value).valid;
