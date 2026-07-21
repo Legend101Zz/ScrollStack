@@ -53,4 +53,24 @@ describe("production goal policy", () => {
       excludeTools: ["bash", "read", "write", "edit", "grep", "find", "ls"],
     });
   });
+
+  it("separates page-writing and thumbnail capabilities", () => {
+    const writing = assertGoalPolicy(
+      goal({
+        goal_type: "MANGA_PAGE_WRITING",
+        allowed_tools: ["get_book_context", "submit_page_script_set"],
+      }),
+    );
+    const thumbnail = assertGoalPolicy(
+      goal({
+        goal_type: "MANGA_THUMBNAIL",
+        allowed_tools: ["validate_layout_draft", "submit_thumbnail_set"],
+      }),
+    );
+
+    expect(writing.required_submission_tool).toBe("submit_page_script_set");
+    expect(writing.tools).not.toContain("validate_layout_draft");
+    expect(thumbnail.required_submission_tool).toBe("submit_thumbnail_set");
+    expect(thumbnail.tools).not.toContain("submit_page_script_set");
+  });
 });

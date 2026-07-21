@@ -13,6 +13,7 @@ from app.services.generation_runs import (
     GenerationRunView,
     StartGenerationRun,
 )
+from app.services.manga_editions import LibraryEdition, MangaEditionView
 from app.services.manga_reader import MangaReaderPayload
 
 
@@ -112,6 +113,27 @@ def control_plane_router(services: ControlPlaneServices) -> APIRouter:
             headers={
                 "Cache-Control": "public, max-age=31536000, immutable",
                 "ETag": f'"{asset.content_hash}"',
+                "X-Content-Type-Options": "nosniff",
+            },
+        )
+
+    @router.get("/library", tags=["manga-library"])
+    async def list_manga_library(owner_id: str | None = None) -> list[LibraryEdition]:
+        return await services.manga_editions.list_library(owner_id=owner_id)
+
+    @router.get("/manga/{edition_id}", tags=["manga-library"])
+    async def get_manga_edition(edition_id: str) -> MangaEditionView:
+        return await services.manga_editions.get(edition_id)
+
+    @router.get("/media/{content_hash}.png", response_class=Response, tags=["manga-library"])
+    async def get_manga_edition_page(content_hash: str) -> Response:
+        path = services.manga_editions.media_path(content_hash, "png")
+        return FileResponse(
+            path,
+            media_type="image/png",
+            headers={
+                "Cache-Control": "public, max-age=31536000, immutable",
+                "ETag": f'"{content_hash}"',
                 "X-Content-Type-Options": "nosniff",
             },
         )

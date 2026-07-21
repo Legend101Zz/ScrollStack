@@ -102,6 +102,35 @@ def test_scope_and_generation_run_routes() -> None:
     assert client.get(f"/generation-runs/{run_id}/artifacts").json() == []
     assert client.post(f"/generation-runs/{run_id}/cancel").json()["run"]["status"] == ("cancelled")
 
+    v2_payload = {
+        "scope_id": scope_id,
+        "requested_outputs": ["manga"],
+        "pipeline_version": "manga-page-dsl.v2",
+        "budget": {
+            "max_text_cost_usd": 3,
+            "max_image_cost_usd": 0,
+            "max_render_minutes": 0,
+            "max_agent_steps": 20,
+            "max_repair_attempts": 2,
+            "max_sprites": 0,
+            "max_key_panels": 0,
+            "max_reels": 0,
+        },
+        "created_by": "user_1",
+    }
+    v2_response = client.post(
+        "/manga-projects/project_1/generation-runs",
+        json=v2_payload,
+    )
+    assert v2_response.status_code == 202
+    assert v2_response.json()["run"]["pipeline_version"] == "manga-page-dsl.v2"
+
+    unsupported = client.post(
+        "/manga-projects/project_1/generation-runs",
+        json={**v2_payload, "pipeline_version": "manga-page-dsl.latest"},
+    )
+    assert unsupported.status_code == 422
+
 
 def test_control_plane_returns_stable_not_found_error() -> None:
     client = TestClient(create_app(build_services(InMemoryRepositories())))

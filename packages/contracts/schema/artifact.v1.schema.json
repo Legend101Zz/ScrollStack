@@ -5,11 +5,22 @@
         "context_pack",
         "adaptation_beat_set",
         "manga_plan",
+        "page_script_set",
+        "thumbnail_set",
+        "page_layout",
+        "compiled_layout",
+        "thumbnail_preview",
+        "validation_report",
+        "revision_request",
+        "image_attempt",
+        "image_asset",
         "asset_request_set",
         "manga_script",
         "storyboard",
         "page_composition",
+        "rendered_page",
         "rendered_page_set",
+        "manga_edition",
         "manga_manifest",
         "reel_spec",
         "render_receipt",
@@ -257,6 +268,20 @@
     "ValidationReport": {
       "additionalProperties": false,
       "properties": {
+        "implementation_version": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Implementation Version"
+        },
         "issues": {
           "items": {
             "$ref": "#/$defs/ValidationIssue"
@@ -268,6 +293,18 @@
         "passed": {
           "title": "Passed",
           "type": "boolean"
+        },
+        "text_model_executed": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Text Model Executed"
         },
         "validator_version": {
           "maxLength": 500,
@@ -293,6 +330,16 @@
       "minLength": 1,
       "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
       "title": "Artifact Id",
+      "type": "string"
+    },
+    "author": {
+      "default": "system",
+      "enum": [
+        "agent",
+        "human",
+        "system"
+      ],
+      "title": "Author",
       "type": "string"
     },
     "content": {
@@ -373,6 +420,21 @@
       "title": "Source Refs",
       "type": "array"
     },
+    "stage_run_id": {
+      "anyOf": [
+        {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Stage Run Id"
+    },
     "storage_ref": {
       "anyOf": [
         {
@@ -387,6 +449,21 @@
       ],
       "default": null,
       "title": "Storage Ref"
+    },
+    "supersedes_artifact_id": {
+      "anyOf": [
+        {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Supersedes Artifact Id"
     },
     "validation_report": {
       "$ref": "#/$defs/ValidationReport"

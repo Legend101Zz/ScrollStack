@@ -261,7 +261,59 @@ class MangaDirectorToolService:
                     f"MangaPlan source {ref.source_unit_id} is outside persisted evidence"
                 )
         cited_source_ids = {ref.source_unit_id for ref in source_refs}
-        if not set(expected).issubset(cited_source_ids):
+        run = await self._runs.get_run(scope.run_id)
+        if run is None:
+            raise AuthorizationError("Agent tool scope references an unknown run")
+        if run.pipeline_version == "manga-demo-deterministic.v1":
+            beat_refs = [ref for beat in plan.beats for ref in beat.source_refs]
+            cited_pages = [ref.page_start for ref in beat_refs]
+            if (
+                plan.target_page_count != 5
+                or len(plan.beats) != 10
+                or len(beat_refs) != 10
+                or len(cited_source_ids) != 10
+            ):
+                raise ArtifactValidationError(
+                    "Deterministic demo MangaPlan requires five pages and exactly one "
+                    "distinct persisted source unit per beat"
+                )
+            if cited_pages != sorted(cited_pages):
+                raise ArtifactValidationError(
+                    "Deterministic demo sources must remain in page order"
+                )
+            for ref in beat_refs:
+                context_ref = expected[ref.source_unit_id]
+                if ref != context_ref:
+                    raise ArtifactValidationError(
+                        "Deterministic demo panels must copy complete persisted SourceRefs"
+                    )
+        elif run.pipeline_version == "manga-edition.v1":
+            beat_refs = [ref for beat in plan.beats for ref in beat.source_refs]
+            context_pages = sorted(ref.page_start for ref in expected.values())
+            cited_pages = [ref.page_start for ref in beat_refs]
+            if (
+                len(plan.beats) != 20
+                or len(beat_refs) != 20
+                or len(cited_source_ids) != 20
+            ):
+                raise ArtifactValidationError(
+                    "Hackathon MangaPlan requires exactly one distinct representative "
+                    "ContextPack source unit per beat"
+                )
+            if cited_pages != sorted(cited_pages):
+                raise ArtifactValidationError(
+                    "Hackathon MangaPlan representative sources must remain in page order"
+                )
+            if (
+                not context_pages
+                or cited_pages[0] > context_pages[0] + 10
+                or cited_pages[-1] < context_pages[-1] - 10
+            ):
+                raise ArtifactValidationError(
+                    "Hackathon MangaPlan representative sources must span the beginning "
+                    "through the end of the selected book"
+                )
+        elif not set(expected).issubset(cited_source_ids):
             missing = ", ".join(sorted(set(expected) - cited_source_ids))
             raise ArtifactValidationError(
                 f"MangaPlan omits selected ContextPack source units: {missing}"

@@ -26,7 +26,8 @@ Each beat object has exactly:
 - `beat_id`: unique stable identifier.
 - `sequence`: zero-based contiguous integer.
 - `source_refs`: 1-128 exact source-reference objects copied from the ContextPack.
-  Across all beats, every ContextPack source unit must appear at least once.
+  Across all beats, every ContextPack source unit must appear at least once,
+  except for the explicitly bounded full-book hackathon edition below.
 - `required_fact_ids`: only fact IDs present in `book_canon.facts`.
 - `narrative_purpose`: one of `hook`, `setup`, `conflict`, `explanation`,
   `reveal`, `payoff`, `cliffhanger`.
@@ -56,5 +57,45 @@ Optional durable updates, when evidence supports them, use these exact shapes:
   `source_refs`.
 
 Before submission, check all identities, allowed enum values, sequence order,
-unique IDs, source hashes, required fact IDs, and complete selected-source
-coverage. The submitted JSON is the artifact candidate; do not wrap it in prose.
+unique IDs, source hashes, required fact IDs, and the source-coverage rule for
+the requested edition shape. The submitted JSON is the artifact candidate; do
+not wrap it in prose.
+
+## Bounded vertical-slice shape
+
+When the typed goal asks for the two-page Phase 1 vertical slice and the
+ContextPack contains three source units, prefer the smallest valid plan:
+
+- set `target_page_count` to exactly `2`;
+- create exactly three beats, with sequences `0`, `1`, and `2`;
+- ground each beat in one corresponding ContextPack source unit, in source
+  order, so all three selected units are covered;
+- use empty arrays for `required_fact_ids`, character intent, and every durable
+  update when the ContextPack provides no canon facts or characters;
+- copy each complete `source_ref` object exactly from the ContextPack, including
+  its null `start_offset`, `end_offset`, and `quote` values;
+- keep every identifier under 160 characters and every short text field under
+  500 characters.
+
+Do not expand this bounded shape merely because the source could support more
+beats. If a submission fails, repair the exact broker error while preserving
+the identities and three-source coverage; do not replace a contract error with
+a source-conflict report.
+
+## Full-book hackathon edition
+
+When the typed goal asks for the full-book hackathon edition:
+
+- set `target_page_count` to exactly `10`;
+- create exactly twenty beats in source order, two beats per final page;
+- cover every major table-of-contents section from Opening through Saying Yes;
+- cite exactly one complete representative source reference per beat, using
+  twenty distinct ContextPack units in page order that span the beginning
+  through the end of the book;
+- do not copy all ContextPack sources into the plan: the accepted ContextPack
+  remains the immutable parent and preserves complete full-source lineage;
+- keep `character_intent` empty when the ContextPack provides no canonical
+  characters; the deterministic art stage introduces its recurring narrator;
+- keep every factual claim grounded in the representative source cited by its
+  beat;
+- end with a practical synthesis of choosing a clear hell-yes commitment.

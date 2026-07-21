@@ -5,6 +5,7 @@
  */
 
 export type ArtifactId = string;
+export type Author = "agent" | "human" | "system";
 export type Content = {
   [k: string]: JsonValue;
 } | null;
@@ -15,11 +16,22 @@ export type ArtifactKind =
   | "context_pack"
   | "adaptation_beat_set"
   | "manga_plan"
+  | "page_script_set"
+  | "thumbnail_set"
+  | "page_layout"
+  | "compiled_layout"
+  | "thumbnail_preview"
+  | "validation_report"
+  | "revision_request"
+  | "image_attempt"
+  | "image_asset"
   | "asset_request_set"
   | "manga_script"
   | "storyboard"
   | "page_composition"
+  | "rendered_page"
   | "rendered_page_set"
+  | "manga_edition"
   | "manga_manifest"
   | "reel_spec"
   | "render_receipt"
@@ -61,7 +73,10 @@ export type TextHash = string;
  * @maxItems 10000
  */
 export type SourceRefs = SourceRef[];
+export type StageRunId = string | null;
 export type StorageRef = string | null;
+export type SupersedesArtifactId = string | null;
+export type ImplementationVersion = string | null;
 export type Code = string;
 export type Message = string;
 export type Path = string | null;
@@ -70,11 +85,13 @@ export type Path = string | null;
  */
 export type Issues = ValidationIssue[];
 export type Passed = boolean;
+export type TextModelExecuted = boolean | null;
 export type ValidatorVersion = string;
 export type ValidationStatus = "pending" | "valid" | "invalid" | "accepted" | "rejected" | "superseded";
 
 export interface Artifact {
   artifact_id: ArtifactId;
+  author?: Author;
   content?: Content;
   content_hash: ContentHash;
   created_at: CreatedAt;
@@ -85,7 +102,9 @@ export interface Artifact {
   run_id: RunId;
   schema_version: SchemaVersion;
   source_refs?: SourceRefs;
+  stage_run_id?: StageRunId;
   storage_ref?: StorageRef;
+  supersedes_artifact_id?: SupersedesArtifactId;
   validation_report: ValidationReport;
   validation_status: ValidationStatus;
 }
@@ -114,8 +133,10 @@ export interface SourceRef {
   text_hash: TextHash;
 }
 export interface ValidationReport {
+  implementation_version?: ImplementationVersion;
   issues?: Issues;
   passed: Passed;
+  text_model_executed?: TextModelExecuted;
   validator_version: ValidatorVersion;
 }
 export interface ValidationIssue {

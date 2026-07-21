@@ -23,18 +23,35 @@ export type MaxSteps = number;
 export type MaxToolCalls = number;
 export type GoalId = string;
 export type AgentGoalType =
-  "BOOK_CANON" | "MANGA_DIRECTION" | "MANGA_COMPOSITION" | "REEL_DIRECTION" | "ARTIFACT_REPAIR";
+  | "BOOK_CANON"
+  | "MANGA_DIRECTION"
+  | "MANGA_PAGE_WRITING"
+  | "MANGA_THUMBNAIL"
+  | "MANGA_COMPOSITION"
+  | "REEL_DIRECTION"
+  | "ARTIFACT_REPAIR";
 export type ArtifactId = string;
 export type ContentHash = string;
 export type ArtifactKind =
   | "context_pack"
   | "adaptation_beat_set"
   | "manga_plan"
+  | "page_script_set"
+  | "thumbnail_set"
+  | "page_layout"
+  | "compiled_layout"
+  | "thumbnail_preview"
+  | "validation_report"
+  | "revision_request"
+  | "image_attempt"
+  | "image_asset"
   | "asset_request_set"
   | "manga_script"
   | "storyboard"
   | "page_composition"
+  | "rendered_page"
   | "rendered_page_set"
+  | "manga_edition"
   | "manga_manifest"
   | "reel_spec"
   | "render_receipt"

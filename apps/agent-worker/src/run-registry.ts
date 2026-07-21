@@ -61,7 +61,8 @@ export class RunRegistry {
     instructions?: string;
     correlationId: string;
   }): LiveRun {
-    const existing = this.runs.get(input.goal.run_id);
+    const executionId = input.goal.goal_id;
+    const existing = this.runs.get(executionId);
     if (existing?.state === "RUNNING" || existing?.state === "SUCCEEDED") return existing;
     if (this.activeRuns >= this.options.maxConcurrentRuns) {
       throw new CapacityError(this.options.maxConcurrentRuns);
@@ -70,7 +71,7 @@ export class RunRegistry {
     const controller = new AbortController();
     const timestamp = this.now().toISOString();
     const run: LiveRun = {
-      run_id: input.goal.run_id,
+      run_id: executionId,
       goal_id: input.goal.goal_id,
       stage_run_id: input.goal.stage_run_id,
       goal_type: input.goal.goal_type,

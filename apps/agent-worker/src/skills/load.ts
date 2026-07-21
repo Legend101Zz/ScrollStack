@@ -12,6 +12,8 @@ const SKILL_PATHS: Readonly<Record<SupportedGoalType, readonly URL[]>> = {
     new URL("./manga-direction/references/manga-grammar.md", import.meta.url),
     new URL("./manga-direction/references/source-grounding.md", import.meta.url),
   ],
+  MANGA_PAGE_WRITING: [new URL("./manga-page-writing/SKILL.md", import.meta.url)],
+  MANGA_THUMBNAIL: [new URL("./manga-thumbnail/SKILL.md", import.meta.url)],
   MANGA_COMPOSITION: [
     new URL("./manga-composition/SKILL.md", import.meta.url),
     new URL("./manga-composition/references/panel-rhythm.md", import.meta.url),

@@ -43,6 +43,33 @@ const TOOL_SCHEMAS: Readonly<Record<DomainToolName, TSchema>> = {
     { source_unit_ids: Type.Array(id, { minItems: 1, maxItems: 20 }), description: shortText },
     { additionalProperties: false },
   ),
+  get_book_context: Type.Object(
+    {
+      section: Type.Optional(Type.String({ minLength: 1, maxLength: 80 })),
+      query: Type.Optional(Type.String({ minLength: 1, maxLength: 500 })),
+    },
+    { additionalProperties: false },
+  ),
+  get_manga_canon: Type.Object(
+    { artifact_ids: Type.Array(id, { minItems: 1, maxItems: 20 }) },
+    { additionalProperties: false },
+  ),
+  submit_page_script_set: Type.Object({ script_set: jsonObject }, { additionalProperties: false }),
+  get_page_script_set: Type.Object({ artifact_id: id }, { additionalProperties: false }),
+  validate_layout_draft: Type.Object(
+    {
+      page_plan: jsonObject,
+      script_set_artifact_id: Type.Optional(id),
+      page_index: Type.Optional(Type.Integer({ minimum: 0, maximum: 999 })),
+    },
+    { additionalProperties: false },
+  ),
+  submit_thumbnail_set: Type.Object(
+    { thumbnail_set: jsonObject },
+    { additionalProperties: false },
+  ),
+  report_page_script_blocker: Type.Object({ blocker: shortText }, { additionalProperties: false }),
+  report_thumbnail_blocker: Type.Object({ blocker: shortText }, { additionalProperties: false }),
   get_manga_plan: Type.Object({ artifact_id: id }, { additionalProperties: false }),
   get_asset_metadata: Type.Object(
     { asset_ids: Type.Array(id, { minItems: 1, maxItems: 100 }) },
@@ -75,6 +102,14 @@ const TOOL_DESCRIPTIONS: Readonly<Record<DomainToolName, string>> = {
   submit_manga_plan: "Submit a candidate MangaPlan for canonical contract validation.",
   submit_asset_requests: "Submit bounded asset requests linked to the manga plan.",
   report_source_conflict: "Report contradictory or insufficient source evidence without inventing a resolution.",
+  get_book_context: "Fetch bounded source facts and continuity from the persisted ContextPack.",
+  get_manga_canon: "Fetch accepted plan or bible artifacts within the active run lineage.",
+  submit_page_script_set: "Submit a source-grounded PageScriptSet for deterministic validation.",
+  get_page_script_set: "Fetch one accepted PageScriptSet artifact by ID.",
+  validate_layout_draft: "Compile and validate one page layout without image generation.",
+  submit_thumbnail_set: "Submit page plans for durable compilation and SVG name previews.",
+  report_page_script_blocker: "Report a page-writing blocker without fabricating source support.",
+  report_thumbnail_blocker: "Report a thumbnail blocker without bypassing validation.",
   get_manga_plan: "Fetch an accepted MangaPlan artifact by ID.",
   get_asset_metadata: "Fetch bounded metadata for project-scoped asset IDs.",
   get_source_receipts: "Fetch source receipts for adaptation beat IDs.",
@@ -90,10 +125,16 @@ const TOOL_DESCRIPTIONS: Readonly<Record<DomainToolName, string>> = {
 const SUBMISSION_TO_ARGUMENT: Partial<Record<DomainToolName, string>> = {
   submit_book_canon: "canon",
   submit_manga_plan: "plan",
+  submit_page_script_set: "script_set",
+  submit_thumbnail_set: "thumbnail_set",
   submit_asset_requests: "requests",
   submit_manga_composition: "candidate",
   submit_reel_specs: "specs",
 };
+
+export function submissionArgumentName(name: DomainToolName): string | undefined {
+  return SUBMISSION_TO_ARGUMENT[name];
+}
 
 export interface ToolAdapterOptions {
   names: readonly DomainToolName[];

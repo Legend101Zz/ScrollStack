@@ -35,16 +35,7 @@ function sourcePages(units: SourceUnitMetadata[]): number[] {
 
 function initialRange(pages: number[]): [number, number] {
   if (pages.length === 0) return [1, 1];
-  for (let index = 0; index < pages.length; index += 1) {
-    const start = pages[index];
-    let end = start;
-    for (let offset = 1; offset < 3; offset += 1) {
-      if (pages[index + offset] !== start + offset) break;
-      end = pages[index + offset];
-    }
-    if (end - start >= 1) return [start, end];
-  }
-  return [pages[0], pages[0]];
+  return [pages[0], pages[pages.length - 1]];
 }
 
 function formatPageSpans(pages: number[]): string {
@@ -78,7 +69,7 @@ function validationMessage(
   }
   if (endPage < startPage) return "The end page must follow the start page.";
   const count = endPage - startPage + 1;
-  if (count < 2 || count > 5) return "Choose a contiguous range of 2 to 5 pages.";
+  if (count < 2 || count > totalPages) return `Choose between 2 and ${totalPages} pages.`;
   if (!availablePages.has(startPage) || !availablePages.has(endPage)) {
     return "Start and end on pages where ScrollStack found readable text.";
   }
@@ -179,7 +170,10 @@ export function ScopeSelector({
         created_by: project.owner_id,
         page_ranges: [{ page_end: endPage, page_start: startPage }],
         project_id: project.project_id,
-        selection_label: `Pages ${startPage}-${endPage}`,
+        selection_label:
+          startPage === 1 && endPage === book.total_pages
+            ? "Complete book"
+            : `Pages ${startPage}-${endPage}`,
       });
       const run = await startGenerationRun(project.project_id, scope.scope_id, project.owner_id);
       router.push(
@@ -263,7 +257,7 @@ export function ScopeSelector({
           </label>
         </div>
         <p className={`mt-4 text-sm ${invalid ? "text-accent-soft" : "text-copy-muted"}`} id="range-help">
-          {invalid ?? "This bounded range will be the only new source text sent into manga direction."}
+          {invalid ?? "The complete selected range will be condensed into one accepted manga edition."}
         </p>
 
         {preview ? (

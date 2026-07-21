@@ -115,11 +115,22 @@ export type ArtifactKind =
   | "context_pack"
   | "adaptation_beat_set"
   | "manga_plan"
+  | "page_script_set"
+  | "thumbnail_set"
+  | "page_layout"
+  | "compiled_layout"
+  | "thumbnail_preview"
+  | "validation_report"
+  | "revision_request"
+  | "image_attempt"
+  | "image_asset"
   | "asset_request_set"
   | "manga_script"
   | "storyboard"
   | "page_composition"
+  | "rendered_page"
   | "rendered_page_set"
+  | "manga_edition"
   | "manga_manifest"
   | "reel_spec"
   | "render_receipt"
@@ -130,7 +141,8 @@ export type SchemaVersion = string;
  */
 export type ParentArtifacts = ArtifactRef[];
 export type ProjectId1 = string;
-export type Purpose1 = "manga_direction" | "manga_composition" | "reel_direction";
+export type Purpose1 =
+  "manga_direction" | "manga_page_writing" | "manga_thumbnail" | "manga_composition" | "reel_direction";
 export type SchemaVersion1 = "context-pack.v1";
 export type ScopeId = string;
 /**

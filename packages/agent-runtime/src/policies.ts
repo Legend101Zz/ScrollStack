@@ -43,6 +43,29 @@ export const GOAL_POLICIES: Readonly<Record<SupportedGoalType, GoalPolicy>> = {
     ],
     required_submission_tool: "submit_manga_plan",
   },
+  MANGA_PAGE_WRITING: {
+    goal_type: "MANGA_PAGE_WRITING",
+    skill_name: "manga-page-writing",
+    tools: [
+      "get_book_context",
+      "get_manga_canon",
+      "submit_page_script_set",
+      "report_page_script_blocker",
+    ],
+    required_submission_tool: "submit_page_script_set",
+  },
+  MANGA_THUMBNAIL: {
+    goal_type: "MANGA_THUMBNAIL",
+    skill_name: "manga-thumbnail",
+    tools: [
+      "get_page_script_set",
+      "list_relevant_assets",
+      "validate_layout_draft",
+      "submit_thumbnail_set",
+      "report_thumbnail_blocker",
+    ],
+    required_submission_tool: "submit_thumbnail_set",
+  },
   MANGA_COMPOSITION: {
     goal_type: "MANGA_COMPOSITION",
     skill_name: "manga-composition",

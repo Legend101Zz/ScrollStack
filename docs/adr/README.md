@@ -14,3 +14,4 @@ a focused pull request that updates its compatibility and migration notes.
 | [006](006-remotion-rendering.md) | Remotion-only reel rendering | Accepted |
 | [007](007-contract-generation.md) | Pydantic-led contract generation | Accepted |
 | [008](008-worker-isolation.md) | Worker credentials and egress | Accepted |
+| [009](009-manga-page-dsl-v2.md) | Hierarchical manga page DSL v2 | Accepted |

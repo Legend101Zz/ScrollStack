@@ -21,7 +21,13 @@ from app.persistence.documents import ProjectMemorySnapshotDoc, ScopeManifestDoc
 from .errors import ContextBudgetError
 from .hashing import content_hash, estimate_tokens
 
-Purpose = Literal["manga_direction", "manga_composition", "reel_direction"]
+Purpose = Literal[
+    "manga_direction",
+    "manga_page_writing",
+    "manga_thumbnail",
+    "manga_composition",
+    "reel_direction",
+]
 OMITTED_TEXT = "Omitted from this bounded context pack; retrieve from durable memory if needed."
 
 
@@ -307,13 +313,18 @@ class ContextCompiler:
         parent_artifacts: list[ArtifactRef],
         omitted: list[str],
     ) -> dict[str, Any]:
-        identity = {
+        identity: dict[str, Any] = {
             "project_id": project_id,
             "scope_id": scope.scope_id,
             "memory_version": memory.memory_version,
             "purpose": purpose,
             "included_source_ids": scope.source_unit_ids,
         }
+        if parent_artifacts:
+            identity["parent_artifacts"] = [
+                item.model_dump(mode="json") for item in parent_artifacts
+            ]
+            identity["constraints"] = constraints.model_dump(mode="json")
         return {
             "schema_version": "context-pack.v1",
             "context_pack_id": f"context_{content_hash(identity)[:24]}",

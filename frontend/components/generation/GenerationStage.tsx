@@ -30,7 +30,10 @@ const stageLabels: Record<string, string> = {
   context_compilation: "Compile grounded book context",
   existing_manga_pipeline: "Compose manga pages",
   manga_composition: "Compose manga panels and pages",
-  manga_direction: "Direct the manga with MiniMax M3",
+  manga_direction: "Condense the book with MiniMax M2.7 highspeed",
+  manga_page_writing: "Write ten grounded manga pages",
+  manga_page_writing_context: "Compile page-writing context",
+  manga_thumbnail: "Validate page layouts",
   memory_delta: "Carry continuity into project memory",
   rendered_page_validation: "Validate finished manga pages",
 };
@@ -94,9 +97,17 @@ export function GenerationStage({
         setLoaded(true);
         setPollError(null);
 
+        let nextArtifacts: Artifact[] = [];
         try {
-          const nextArtifacts = await getGenerationArtifacts(persistedRunId, controller.signal);
-          if (active) setArtifacts(nextArtifacts);
+          nextArtifacts = await getGenerationArtifacts(persistedRunId, controller.signal);
+          if (active) {
+            setArtifacts(nextArtifacts);
+            const edition = nextArtifacts.find((artifact) => artifact.kind === "manga_edition");
+            if (nextSnapshot.run.status === "succeeded" && edition) {
+              router.replace(`/manga/${encodeURIComponent(edition.artifact_id)}`);
+              return;
+            }
+          }
         } catch (caught) {
           if (active) {
             setPollError(
@@ -107,9 +118,9 @@ export function GenerationStage({
           }
         }
 
-        if (nextSnapshot.run.status === "succeeded") {
+        if (nextSnapshot.run.status === "succeeded" && nextArtifacts.length === 0) {
           router.replace(
-            `/books/${encodeURIComponent(bookId)}/manga/${encodeURIComponent(projectId)}`,
+            "/library",
           );
           return;
         }

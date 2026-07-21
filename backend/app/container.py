@@ -10,9 +10,10 @@ from app.persistence.protocols import (
     Repositories,
     WorkflowDispatcher,
 )
-from app.services.domain_tools import MangaDirectorToolService
 from app.services.generation_runs import GenerationRunService
+from app.services.manga_editions import MangaEditionService
 from app.services.manga_reader import MangaReaderService
+from app.services.page_domain_tools import MangaDomainToolService
 from app.services.pdf_ingestion import PdfIngestionService
 from app.services.projects import MangaProjectService
 from app.services.reels import ReelPlayerService
@@ -25,9 +26,10 @@ class ControlPlaneServices:
     projects: MangaProjectService
     scopes: ScopeService
     generation_runs: GenerationRunService
-    domain_tools: MangaDirectorToolService
+    domain_tools: MangaDomainToolService
     reels: ReelPlayerService
     manga_reader: MangaReaderService
+    manga_editions: MangaEditionService
 
 
 def build_services(
@@ -55,7 +57,11 @@ def build_services(
             repositories,
             dispatcher,
         ),
-        domain_tools=MangaDirectorToolService(repositories, repositories),
+        domain_tools=MangaDomainToolService(
+            repositories,
+            repositories,
+            media_root=media_root,
+        ),
         reels=ReelPlayerService(
             repositories,
             repositories,
@@ -63,4 +69,5 @@ def build_services(
             repositories,
         ),
         manga_reader=MangaReaderService(repositories, media_root=media_root),
+        manga_editions=MangaEditionService(repositories, media_root=media_root),
     )
