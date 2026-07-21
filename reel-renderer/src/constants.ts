@@ -1,5 +1,8 @@
 export const REEL_COMPOSITION_ID = "ScrollStackReel";
 
+/** Bumped with any change that can alter rendered output. Recorded in every RenderReceipt. */
+export const REEL_RENDERER_VERSION = "0.1.0";
+
 export const REEL_OUTPUT = Object.freeze({
   width: 1080,
   height: 1920,

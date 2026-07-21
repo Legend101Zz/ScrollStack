@@ -25,6 +25,21 @@ function durationForAudio(
   return Math.max(1, Math.min(remaining, Math.ceil((asset.durationMs / 1_000) * fps)));
 }
 
+const MUSIC_VOLUME = 0.22;
+const MUSIC_FADE_IN_FRAMES = 15;
+const MUSIC_FADE_OUT_FRAMES = 30;
+
+/**
+ * A 30s bed under a 12s reel would otherwise stop dead on the last frame. Ramp
+ * it instead, deterministically per frame so the render and the live player
+ * agree.
+ */
+function musicVolumeAt(frame: number, durationFrames: number): number {
+  const fadeIn = Math.min(1, (frame + 1) / MUSIC_FADE_IN_FRAMES);
+  const fadeOut = Math.min(1, Math.max(0, durationFrames - frame) / MUSIC_FADE_OUT_FRAMES);
+  return MUSIC_VOLUME * Math.min(fadeIn, fadeOut);
+}
+
 function AudioTracks({ compiled }: Readonly<{ compiled: CompiledReel }>) {
   const { audio } = compiled.spec;
   const { duration_frames: durationFrames, fps } = compiled.spec.format;
@@ -39,7 +54,7 @@ function AudioTracks({ compiled }: Readonly<{ compiled: CompiledReel }>) {
         <Audio
           src={music.src}
           durationInFrames={durationForAudio(music, 0, durationFrames, fps)}
-          volume={0.22}
+          volume={(frame) => musicVolumeAt(frame, durationFrames)}
           name="Music"
           onError={() => "fail"}
         />
