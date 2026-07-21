@@ -76,10 +76,36 @@ zsh -n stop.sh
 git diff --check
 ```
 
-## Build Week provenance
+## AI-assisted engineering provenance
 
-ScrollStack is a new repository created for OpenAI Build Week. The commit and
-Codex session history distinguish work created during the event. Before
-submission this section will include the primary `/feedback` session ID, the
-golden demo source license, exact setup instructions, and the final validation
-evidence.
+ScrollStack was built with OpenAI Codex and GPT-5.6 used as engineering
+assistants during planning, implementation, review, and documentation. Their
+role was to accelerate repository setup, coordinate the two-contributor work
+split, draft implementation plans, inspect diffs, and produce scoped code
+changes under human direction.
+
+The project keeps AI assistance separate from product runtime behavior:
+
+- Codex helped maintain the collaboration guide in [`AGENTS.md`](AGENTS.md),
+  plan ownership boundaries, and keep Mrigesh's core/manga lane separate from
+  Utkarsh's reel-rendering lane.
+- GPT-5.6-assisted coding was used for targeted implementation work such as
+  contract-aware reel playback, deterministic Remotion rendering, progress
+  integration, tests, and handoff notes.
+- Runtime creative generation is intentionally constrained by typed artifacts.
+  Models may propose manga or reel data, but the application accepts only
+  schema-validated outputs such as `RenderedPage`, `MangaManifest`, and
+  `ReelSpec`.
+- Deterministic renderers, tests, and visual evidence are used to verify the
+  accepted artifacts instead of trusting model output directly.
+
+Human contributors remain responsible for product decisions, final code review,
+accepted contracts, submitted PRs, and release readiness. Commit history, PR
+descriptions, test output, and evidence files are the source of truth for what
+was implemented and validated.
+
+## Build Week notes
+
+ScrollStack is a new repository created for OpenAI Build Week. Before
+submission this section should include the primary feedback session ID, golden
+demo source license, exact setup instructions, and final validation evidence.
