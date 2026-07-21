@@ -9,6 +9,14 @@ export {
   type ReelComponentDefinition,
   type SafeZonePolicy,
 } from "./catalog";
+export {
+  REEL_AUDIO_KIT_VERSION,
+  isReelAudioKitSoundId,
+  reelAudioKit,
+  reelAudioKitSounds,
+  type ReelAudioKitSound,
+  type ReelAudioKitSoundId,
+} from "./audio-kit";
 export { compileReel } from "./compile";
 export { deriveReelSpecs, type DeriveReelSpecsOptions } from "./derive-reel-specs";
 export { previewCompiledReel, previewMangaManifest, previewReelCompilationInput, previewReelSpec } from "./preview-fixture";

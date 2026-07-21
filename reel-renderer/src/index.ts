@@ -1,4 +1,5 @@
 export { localReelAssetStager } from "./asset-staging";
+export { reelAudioKitRoot, reelAudioKitSources } from "./audio-kit-sources";
 export {
   REEL_COMPOSITION_ID,
   REEL_MEDIA_ENCODING_OPTIONS,

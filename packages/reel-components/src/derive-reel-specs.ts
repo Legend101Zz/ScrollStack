@@ -19,6 +19,11 @@ export type DeriveReelSpecsOptions = Readonly<{
   seriesId?: string;
   /** Reel length to aim for. 600 frames is 20s, the middle of the 10-30s rule. */
   targetDurationFrames?: number;
+  /**
+   * Place reviewed audio-kit SFX cues on the timeline. Off by default: the cues
+   * reference kit asset IDs, so the caller must resolve them before rendering.
+   */
+  sfx?: boolean;
 }>;
 
 const DEFAULT_TARGET_DURATION_FRAMES = 600;
@@ -168,6 +173,30 @@ function chunk(drafts: readonly DraftScene[], targetDurationFrames: number): Dra
   return reels;
 }
 
+type SfxCue = NonNullable<ReelSpec["audio"]["sfx_cues"]>[number];
+
+/**
+ * Sound punctuates the cut, it never carries meaning: the player is muted-first
+ * by design (§16.4), so every cue sits on a transition the captions already
+ * cover. One cue per scene boundary, plus an opening hit inside the first second
+ * so a scroll-by lands on something (§13.2).
+ */
+function sfxCuesFor(scenes: readonly ReelScene[]): SfxCue[] {
+  const cues: SfxCue[] = [{ asset_id: "sfx_whoosh", frame: 0, gain: 0.7 }];
+  for (const scene of scenes.slice(1)) {
+    const assetId =
+      scene.scene_type === "page_turn"
+        ? "sfx_page_turn"
+        : scene.scene_type === "impact_cut"
+          ? "sfx_whip"
+          : scene.scene_type === "narrator_card"
+            ? "sfx_shutter"
+            : "sfx_whoosh";
+    cues.push({ asset_id: assetId, frame: scene.start_frame, gain: 0.5 });
+  }
+  return cues;
+}
+
 function dedupeSourceRefs(panels: readonly ManifestPanel[]): SourceRef[] {
   const seen = new Map<string, SourceRef>();
   for (const panel of panels) {
@@ -237,7 +266,7 @@ export function deriveReelSpecs(
       beat_ids: beatIds,
       format: { ...REEL_FORMAT, duration_frames: frame },
       style_kit_id: SCROLLSTACK_STYLE_KIT_ID,
-      audio: { sfx_cues: [] },
+      audio: { sfx_cues: options.sfx ? sfxCuesFor(scenes) : [] },
       scenes,
       interaction_map: interactionMap,
       source_refs: dedupeSourceRefs(group.map((draft) => draft.panel)) as ReelSpec["source_refs"],
