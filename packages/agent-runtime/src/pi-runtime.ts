@@ -1,6 +1,7 @@
 import {
   createAgentSession,
   DefaultResourceLoader,
+  ModelRuntime,
   SessionManager,
   SettingsManager,
   type AgentSession,
@@ -36,8 +37,32 @@ export interface PiAgentRuntimeConfig {
   skills: Readonly<Record<SupportedGoalType, ProductionSkill>>;
   provider?: string;
   model?: string;
+  modelSelection?: PiModelSelection;
   cwd?: string;
   credentialReady?: () => boolean;
+}
+
+export interface PiModelSelection {
+  model: NonNullable<CreateAgentSessionOptions["model"]>;
+  runtime: ModelRuntime;
+}
+
+/**
+ * Resolve a provider/model pair only from the catalog bundled with the pinned
+ * Pi runtime. Network model discovery and user-level Pi configuration stay
+ * disabled so an invalid identifier cannot fall through to another provider.
+ */
+export async function resolvePinnedModel(
+  provider: string,
+  modelId: string,
+): Promise<PiModelSelection | undefined> {
+  const runtime = await ModelRuntime.create({
+    authPath: "/tmp/scrollstack-agent-no-stored-auth.json",
+    modelsPath: null,
+    allowModelNetwork: false,
+  });
+  const model = runtime.getModel(provider, modelId);
+  return model ? { model, runtime } : undefined;
 }
 
 interface LiveSession {
@@ -84,10 +109,23 @@ export class PiAgentRuntime implements ScrollStackAgentRuntime {
   constructor(private readonly config: PiAgentRuntimeConfig) {}
 
   isReady(): boolean {
-    return this.config.credentialReady?.() ?? true;
+    const selection = this.config.modelSelection;
+    return Boolean(
+      this.config.provider &&
+        this.config.model &&
+        selection &&
+        selection.model.provider === this.config.provider &&
+        selection.model.id === this.config.model &&
+        (this.config.credentialReady?.() ?? false),
+    );
   }
 
   async run(goal: AgentGoal, context: ContextPack, options: AgentRunOptions): Promise<AgentRunResult> {
+    if (!this.isReady() || !this.config.modelSelection) {
+      throw new Error(
+        `Configured model ${this.config.provider ?? "<missing>"}/${this.config.model ?? "<missing>"} is unavailable or unauthenticated`,
+      );
+    }
     const policy = assertGoalPolicy(goal);
     const skill = this.config.skills[policy.goal_type];
     if (!skill || skill.name !== policy.skill_name) {
@@ -121,6 +159,7 @@ export class PiAgentRuntime implements ScrollStackAgentRuntime {
         project_id: context.project_id,
       },
       maxToolCalls: goal.budget.max_tool_calls,
+      maxRepairAttempts: goal.budget.max_repair_attempts,
       onCandidate: (value) => {
         candidate = value;
       },
@@ -138,6 +177,14 @@ export class PiAgentRuntime implements ScrollStackAgentRuntime {
       sessionManager: SessionManager.inMemory(),
       settingsManager,
       resourceLoader,
+      modelRuntime: this.config.modelSelection.runtime,
+      model: {
+        ...this.config.modelSelection.model,
+        maxTokens: Math.min(
+          this.config.modelSelection.model.maxTokens,
+          goal.budget.max_output_tokens,
+        ),
+      },
     };
     const { session } = await createAgentSession(sessionOptions);
     const trace: AgentRunTrace = {
@@ -151,6 +198,7 @@ export class PiAgentRuntime implements ScrollStackAgentRuntime {
       tool_calls: toolCalls,
       tokens: { input: 0, output: 0, cache_read: 0, cache_write: 0, total: 0 },
       cost_usd: 0,
+      latency_ms: 0,
       compaction_count: 0,
     };
     const live: LiveSession = { runId: goal.run_id, session, goalType: policy.goal_type, trace };
@@ -164,6 +212,10 @@ export class PiAgentRuntime implements ScrollStackAgentRuntime {
         if (turnCount > goal.budget.max_steps) {
           void session.abort();
         }
+      } else if (event.type === "turn_end") {
+        if (session.getSessionStats().cost > goal.budget.max_cost_usd) {
+          void session.abort();
+        }
       } else if (event.type === "compaction_end" && !event.aborted) {
         trace.compaction_count += 1;
       }
@@ -172,6 +224,7 @@ export class PiAgentRuntime implements ScrollStackAgentRuntime {
     options.signal?.addEventListener("abort", abort, { once: true });
 
     try {
+      const startedAt = performance.now();
       await session.prompt(buildUserPrompt(goal, context, options.instructions), {
         expandPromptTemplates: false,
         source: "rpc",
@@ -185,6 +238,9 @@ export class PiAgentRuntime implements ScrollStackAgentRuntime {
       }
 
       const stats = session.getSessionStats();
+      if (stats.cost > goal.budget.max_cost_usd) {
+        throw new Error(`Agent text-cost budget exceeded (${goal.budget.max_cost_usd} USD)`);
+      }
       trace.tokens = {
         input: stats.tokens.input,
         output: stats.tokens.output,
@@ -193,6 +249,7 @@ export class PiAgentRuntime implements ScrollStackAgentRuntime {
         total: stats.tokens.total,
       };
       trace.cost_usd = stats.cost;
+      trace.latency_ms = Math.max(0, Math.round(performance.now() - startedAt));
       live.candidate = candidate;
       return { session_ref: { session_id: session.sessionId }, candidate, trace };
     } finally {

@@ -263,6 +263,14 @@ class InMemoryRepositories:
         run = self.runs.get(run_id)
         return _copy_document(run) if run else None
 
+    async def list_project_runs(self, project_id: str) -> list[GenerationRunDoc]:
+        runs = [
+            item.model_copy(deep=True)
+            for item in self.runs.values()
+            if item.project_id == project_id
+        ]
+        return sorted(runs, key=lambda item: (item.updated_at, item.run_id), reverse=True)
+
     async def save_run(self, run: GenerationRunDoc) -> GenerationRunDoc:
         self.runs[run.run_id] = _copy_document(run)
         return _copy_document(run)
@@ -376,9 +384,7 @@ class BeanieRepositories:
         try:
             return cast(ProjectMemorySnapshotDoc, await snapshot.insert())
         except DuplicateKeyError:
-            existing = await self.get_memory_snapshot(
-                snapshot.project_id, snapshot.memory_version
-            )
+            existing = await self.get_memory_snapshot(snapshot.project_id, snapshot.memory_version)
             if existing is None or existing.content_hash != snapshot.content_hash:
                 raise
             return existing
@@ -513,6 +519,13 @@ class BeanieRepositories:
 
     async def get_run(self, run_id: str) -> GenerationRunDoc | None:
         return await GenerationRunDoc.find_one(GenerationRunDoc.run_id == run_id)
+
+    async def list_project_runs(self, project_id: str) -> list[GenerationRunDoc]:
+        return (
+            await GenerationRunDoc.find(GenerationRunDoc.project_id == project_id)
+            .sort(-GenerationRunDoc.updated_at)
+            .to_list()
+        )
 
     async def save_run(self, run: GenerationRunDoc) -> GenerationRunDoc:
         existing = await self.get_run(run.run_id)

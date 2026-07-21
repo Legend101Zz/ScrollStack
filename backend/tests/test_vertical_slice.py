@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, Coroutine, TypeVar
 
 import pymupdf
+import pytest
 from fastapi.testclient import TestClient
 
 from app.container import build_services
@@ -22,7 +23,9 @@ from app.persistence.repositories import InMemoryRepositories
 from app.services.agent_worker import AgentExecutionResult
 from app.services.context_compiler import ContextCompiler
 from app.services.domain_tools import DomainToolRequest, MangaDirectorToolService
+from app.services.errors import InvalidPdfError, InvalidScopeError, NotFoundError, PdfLimitError
 from app.services.generation_workflow import GenerationWorkflowService
+from app.services.image_generation import GeneratedImage, ImageGenerationError
 from app.services.memory import MemoryMergeService
 from app.services.pdf_ingestion import PdfIngestionService
 from app.services.projects import MangaProjectService
@@ -56,6 +59,29 @@ def golden_pdf(page_count: int = 20) -> bytes:
     return bytes(payload)
 
 
+def golden_png() -> bytes:
+    document = pymupdf.open()
+    page = document.new_page(width=400, height=600)
+    page.draw_rect((20, 20, 380, 580), color=(0, 0, 0), width=8)
+    page.insert_text((60, 280), "ORIGINAL MANGA PANEL", fontsize=20)
+    payload = page.get_pixmap().tobytes("png")
+    document.close()
+    return bytes(payload)
+
+
+def encrypted_pdf() -> bytes:
+    document = pymupdf.open()
+    page = document.new_page()
+    page.insert_text((72, 72), "encrypted source")
+    payload = document.tobytes(
+        encryption=pymupdf.PDF_ENCRYPT_AES_256,
+        owner_pw="owner-secret",
+        user_pw="reader-secret",
+    )
+    document.close()
+    return bytes(payload)
+
+
 def constraints() -> GenerationConstraints:
     return GenerationConstraints(
         image_mode="budgeted",
@@ -69,7 +95,38 @@ def constraints() -> GenerationConstraints:
 
 
 def plan_for(context: Any) -> dict[str, Any]:
-    first = context.source_units[0].source_ref.model_dump(mode="json")
+    beats = []
+    required_fact_ids = [fact.fact_id for fact in context.book_canon.facts]
+    for sequence, source_unit in enumerate(context.source_units):
+        source_ref = source_unit.source_ref.model_dump(mode="json")
+        beats.append(
+            {
+                "beat_id": f"beat_{sequence:03d}",
+                "sequence": sequence,
+                "source_refs": [source_ref],
+                "required_fact_ids": required_fact_ids if sequence == 0 else [],
+                "narrative_purpose": "reveal"
+                if sequence == len(context.source_units) - 1
+                else "setup",
+                "book_essence": (
+                    f"Selected page {source_ref['page_start']} advances the observatory signal."
+                ),
+                "dramatization": (
+                    f"Mara follows page {source_ref['page_start']} toward the lens room."
+                ),
+                "character_intent": [
+                    {
+                        "character_id": "mara",
+                        "intent": "Identify the source of the signal.",
+                        "emotional_state": "resolute",
+                    }
+                ],
+                "visual_intent": ["Hold on the clue before the reveal."],
+                "must_preserve": ["The observatory evidence remains source-grounded."],
+                "may_compress": [],
+                "confidence": 1,
+            }
+        )
     return {
         "schema_version": "manga-plan.v1",
         "plan_id": f"plan_{context.scope_id}",
@@ -79,31 +136,8 @@ def plan_for(context: Any) -> dict[str, Any]:
         "memory_version": context.memory_version,
         "title": "The Last Observatory",
         "summary": "Mara follows the signal into the sealed observatory.",
-        "target_page_count": 8,
-        "beats": [
-            {
-                "beat_id": "beat_000",
-                "sequence": 0,
-                "source_refs": [first],
-                "required_fact_ids": [
-                    fact.fact_id for fact in context.book_canon.facts
-                ],
-                "narrative_purpose": "reveal",
-                "book_essence": "The observatory signal is grounded in the selected pages.",
-                "dramatization": "Mara opens the lens-room door after the third knock.",
-                "character_intent": [
-                    {
-                        "character_id": "mara",
-                        "intent": "Identify the source of the signal.",
-                        "emotional_state": "resolute",
-                    }
-                ],
-                "visual_intent": ["Hold on the sealed door before the reveal."],
-                "must_preserve": ["The observatory evidence remains source-grounded."],
-                "may_compress": [],
-                "confidence": 1,
-            }
-        ],
+        "target_page_count": min(8, len(beats)),
+        "beats": beats,
         "character_state_updates": [],
         "terminology_updates": [],
         "new_facts": [],
@@ -128,9 +162,7 @@ def seed_pdf_project(
         )
     )
     project, created = resolve(
-        MangaProjectService(repository, repository).create(
-            uploaded.book.book_id, owner_id="user_1"
-        )
+        MangaProjectService(repository, repository).create(uploaded.book.book_id, owner_id="user_1")
     )
     assert created is True
     scopes = ScopeService(repository, repository, repository)
@@ -191,13 +223,83 @@ def test_pdf_ingestion_is_hash_idempotent_and_exposes_stable_page_units(
     assert (tmp_path / "books" / first.book.book_id / "source.pdf").read_bytes() == payload
 
 
+def test_pdf_ingestion_rejects_non_pdf_malformed_encrypted_and_oversized_input(
+    tmp_path: Path,
+) -> None:
+    repository = InMemoryRepositories()
+    service = PdfIngestionService(
+        repository,
+        repository,
+        media_root=tmp_path,
+        max_upload_bytes=128,
+    )
+
+    with pytest.raises(InvalidPdfError, match="Only PDF files"):
+        resolve(
+            service.register_upload(
+                filename="notes.txt",
+                content=b"plain text",
+                owner_id="user_1",
+            )
+        )
+    with pytest.raises(InvalidPdfError, match="malformed or unsupported"):
+        resolve(
+            service.register_upload(
+                filename="malformed.pdf",
+                content=b"%PDF-1.7\nnot-a-real-pdf",
+                owner_id="user_1",
+            )
+        )
+    encrypted = encrypted_pdf()
+    with pytest.raises(PdfLimitError, match="maximum is 128"):
+        resolve(
+            service.register_upload(
+                filename="encrypted.pdf",
+                content=encrypted,
+                owner_id="user_1",
+            )
+        )
+
+    encrypted_service = PdfIngestionService(
+        repository,
+        repository,
+        media_root=tmp_path,
+        max_upload_bytes=len(encrypted) + 1,
+    )
+    with pytest.raises(InvalidPdfError, match="Encrypted PDFs"):
+        resolve(
+            encrypted_service.register_upload(
+                filename="encrypted.pdf",
+                content=encrypted,
+                owner_id="user_1",
+            )
+        )
+
+
+def test_scope_rejects_page_range_outside_parsed_source(tmp_path: Path) -> None:
+    repository = InMemoryRepositories()
+    book_id, project_id, _first_scope_id, _second_scope_id = seed_pdf_project(
+        repository,
+        tmp_path,
+    )
+
+    with pytest.raises(InvalidScopeError, match="overlap"):
+        resolve(
+            ScopeService(repository, repository, repository).create(
+                project_id=project_id,
+                book_id=book_id,
+                page_ranges=[PageRange(page_start=21, page_end=25)],
+                selection_label="Outside book",
+                created_by="user_1",
+            )
+        )
+
+
 def test_two_scope_context_rebuilds_accepted_continuity_without_chat(
     tmp_path: Path,
 ) -> None:
     repository = InMemoryRepositories()
-    book_id, project_id, first_scope_id, second_scope_id = seed_pdf_project(
-        repository, tmp_path
-    )
+    book_id, project_id, first_scope_id, second_scope_id = seed_pdf_project(repository, tmp_path)
     first_unit = resolve(repository.list_source_units(book_id))[0]
     source_ref = {
         "book_id": book_id,
@@ -303,9 +405,7 @@ def test_two_scope_context_rebuilds_accepted_continuity_without_chat(
     )
 
     assert first_scope_id != second_scope_id
-    assert {unit.source_ref.page_start for unit in context.source_units} == set(
-        range(11, 21)
-    )
+    assert {unit.source_ref.page_start for unit in context.source_units} == set(range(11, 21))
     assert context.continuity.previous_slice_ending == (
         "Mara hears three knocks from inside the sealed lens room."
     )
@@ -350,12 +450,70 @@ class BrokeredFakeAgent:
             candidate=plan,
             trace={
                 "session_id": "session_1",
-                "provider": "openai",
-                "model": "configured-test-model",
+                "provider": "minimax",
+                "model": "MiniMax-M3",
                 "skill_hash": "d" * 64,
                 "tokens": {"input": 200, "output": 100, "total": 300},
                 "cost_usd": 0.01,
                 "latency_ms": 50,
+            },
+        )
+
+
+class FakeImageProvider:
+    def __init__(self, *, fail: bool = False, cost_usd: float | None = 0.02) -> None:
+        self.calls = 0
+        self.fail = fail
+        self.cost_usd = cost_usd
+
+    async def generate(
+        self,
+        *,
+        prompt: str,
+        model: str,
+        aspect_ratio: str,
+    ) -> GeneratedImage:
+        assert prompt
+        assert model == "google/gemini-2.5-flash-image"
+        assert aspect_ratio == "2:3"
+        self.calls += 1
+        if self.fail:
+            raise ImageGenerationError("OpenRouter returned HTTP 503")
+        return GeneratedImage(
+            content=golden_png(),
+            mime_type="image/png",
+            width=400,
+            height=600,
+            provider="openrouter",
+            model=model,
+            input_tokens=120,
+            output_tokens=80,
+            cost_usd=self.cost_usd,
+            latency_ms=75,
+        )
+
+
+class InvalidCandidateAgent:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def run(
+        self,
+        goal: Any,
+        context: Any,
+        *,
+        instructions: str | None = None,
+    ) -> AgentExecutionResult:
+        del goal, context, instructions
+        self.calls += 1
+        return AgentExecutionResult(
+            candidate={"schema_version": "manga-plan.v1", "unexpected": True},
+            trace={
+                "provider": "minimax",
+                "model": "MiniMax-M3",
+                "skill_hash": "d" * 64,
+                "tokens": {},
+                "latency_ms": 10,
             },
         )
 
@@ -392,19 +550,20 @@ def generation_run(
     return run
 
 
-def test_workflow_persists_context_and_broker_validated_plan_without_false_success(
+def test_workflow_completes_accepted_pages_memory_and_is_idempotent(
     tmp_path: Path,
 ) -> None:
     repository = InMemoryRepositories()
-    _book_id, project_id, first_scope_id, _second_scope_id = seed_pdf_project(
-        repository, tmp_path
-    )
+    _book_id, project_id, first_scope_id, second_scope_id = seed_pdf_project(repository, tmp_path)
     run = generation_run(repository, project_id, first_scope_id)
     agent = BrokeredFakeAgent(MangaDirectorToolService(repository, repository))
+    image_provider = FakeImageProvider()
     workflow = GenerationWorkflowService(
         repository,
         agent_worker=agent,
         agentic_enabled=True,
+        image_provider=image_provider,
+        media_root=tmp_path,
     )
 
     result = resolve(workflow.execute(run.run_id))
@@ -412,37 +571,271 @@ def test_workflow_persists_context_and_broker_validated_plan_without_false_succe
     stages = resolve(repository.list_stages(run.run_id))
     accepted = resolve(repository.list_artifacts(run.run_id, accepted_only=True))
 
-    assert result.status == "terminal_failed"
-    assert result.error_code == "MANGA_PIPELINE_NOT_CONNECTED"
+    assert result.status == "succeeded"
+    assert result.error_code is None
     assert repeated == result
     assert agent.calls == 1
-    assert {item.kind for item in accepted} == {"context_pack", "manga_plan"}
+    assert image_provider.calls == 2
+    assert {
+        "context-pack.v1",
+        "manga-plan.v1",
+        "image-asset.v1",
+        "asset-set.v1",
+        "rendered-page.v1",
+        "rendered-page-set.v1",
+        "memory-delta.v1",
+    }.issubset({item.schema_version for item in accepted})
     assert any(
-        item.stage_name == "context_compilation" and item.status == "succeeded"
-        for item in stages
+        item.stage_name == "context_compilation" and item.status == "succeeded" for item in stages
     )
     assert any(
-        item.stage_name == "manga_direction" and item.status == "succeeded"
-        for item in stages
+        item.stage_name == "manga_direction" and item.status == "succeeded" for item in stages
     )
-    assert any(
-        item.stage_name == "existing_manga_pipeline"
-        and item.error_code == "MANGA_PIPELINE_NOT_CONNECTED"
-        for item in stages
-    )
+    assert all(item.status == "succeeded" for item in stages)
     plan = next(item for item in accepted if item.kind == "manga_plan")
     assert plan.model_receipt is not None
-    assert plan.model_receipt["provider"] == "openai"
+    assert plan.model_receipt["provider"] == "minimax"
+    assert plan.model_receipt["model"] == "MiniMax-M3"
+    assert plan.model_receipt["latency_ms"] == 50
+    assert plan.model_receipt["attempt"] == 1
     assert plan.parent_artifact_ids[1].startswith("candidate_manga_plan_")
+    assert repository.projects[project_id].active_memory_version == 1
+    memory = repository.memory_snapshots[(project_id, 1)]
+    assert len(memory.asset_index) == 2
+    assert memory.continuity["previous_slice_ending"] == ("Mara opens the sealed lens-room door.")
+    memory_delta_artifact = next(
+        item for item in accepted if item.schema_version == "memory-delta.v1"
+    )
+    assert memory_delta_artifact.source_refs
+    assert set(memory_delta_artifact.parent_artifact_ids).issubset(set(memory.source_artifact_ids))
+
+    fresh = InMemoryRepositories()
+    fresh.source_units = {
+        key: value.model_copy(deep=True) for key, value in repository.source_units.items()
+    }
+    fresh.scopes[second_scope_id] = repository.scopes[second_scope_id].model_copy(deep=True)
+    fresh.projects[project_id] = repository.projects[project_id].model_copy(deep=True)
+    fresh.memory_snapshots[(project_id, 1)] = memory.model_copy(deep=True)
+    continued_context = ContextCompiler().compile(
+        project_id=project_id,
+        scope=fresh.scopes[second_scope_id],
+        memory=fresh.memory_snapshots[(project_id, 1)],
+        source_units=resolve(fresh.list_source_units(_book_id)),
+        purpose="manga_direction",
+        constraints=constraints(),
+        max_input_tokens=80_000,
+    )
+    assert continued_context.memory_version == 1
+    assert continued_context.continuity.previous_slice_ending == (
+        "Mara opens the sealed lens-room door."
+    )
+    assert len(continued_context.assets) == 2
+    assert {item.source_ref.page_start for item in continued_context.source_units} == set(
+        range(11, 21)
+    )
+
+    reader = resolve(
+        build_services(repository, media_root=tmp_path).manga_reader.get(
+            _book_id,
+            project_id,
+        )
+    )
+    assert reader.run_id == run.run_id
+    assert reader.pages[0].schema_version == "rendered-page.v1"
+    assert reader.assets[0].model_receipt is not None
+    assert reader.assets[0].model_receipt.provider == "openrouter"
+
+    client = TestClient(create_app(build_services(repository, media_root=tmp_path)))
+    response = client.get(f"/books/{_book_id}/manga/{project_id}/reader")
+    assert response.status_code == 200
+    assert response.json()["schema_version"] == "manga-reader.v1"
+    asset_url = response.json()["assets"][0]["url"]
+    asset_response = client.get(asset_url)
+    assert asset_response.status_code == 200
+    assert asset_response.headers["cache-control"].endswith("immutable")
+    assert asset_response.content == golden_png()
+
+    rendered_page_artifact = next(
+        item for item in repository.artifacts.values() if item.schema_version == "rendered-page.v1"
+    )
+    assert rendered_page_artifact.content is not None
+    rendered_page_artifact.content["schema_version"] = "tampered-rendered-page.v1"
+    corrupt_reader = client.get(f"/books/{_book_id}/manga/{project_id}/reader")
+    assert corrupt_reader.status_code == 422
+    assert corrupt_reader.json()["error"]["code"] == "artifact_validation_failed"
+
+
+def test_missing_image_credential_is_retryable_and_does_not_replay_manga_direction(
+    tmp_path: Path,
+) -> None:
+    repository = InMemoryRepositories()
+    book_id, project_id, scope_id, _ = seed_pdf_project(repository, tmp_path)
+    run = generation_run(repository, project_id, scope_id)
+    agent = BrokeredFakeAgent(MangaDirectorToolService(repository, repository))
+    workflow = GenerationWorkflowService(
+        repository,
+        agent_worker=agent,
+        agentic_enabled=True,
+        image_provider=None,
+        media_root=tmp_path,
+    )
+
+    first = resolve(workflow.execute(run.run_id))
+    second = resolve(workflow.execute(run.run_id))
+
+    assert first.status == second.status == "retryable_failed"
+    assert first.error_code == second.error_code == "OPENROUTER_API_KEY_MISSING"
+    assert agent.calls == 1
+    assert not any(
+        item.schema_version.startswith("rendered-page")
+        for item in resolve(repository.list_artifacts(run.run_id, accepted_only=True))
+    )
+    with pytest.raises(NotFoundError, match="No accepted completed manga"):
+        resolve(
+            build_services(repository, media_root=tmp_path).manga_reader.get(
+                book_id,
+                project_id,
+            )
+        )
+
+
+def test_image_provider_failure_is_typed_retryable(tmp_path: Path) -> None:
+    repository = InMemoryRepositories()
+    _book_id, project_id, scope_id, _ = seed_pdf_project(repository, tmp_path)
+    run = generation_run(repository, project_id, scope_id)
+    agent = BrokeredFakeAgent(MangaDirectorToolService(repository, repository))
+    image_provider = FakeImageProvider(fail=True)
+
+    workflow = GenerationWorkflowService(
+        repository,
+        agent_worker=agent,
+        agentic_enabled=True,
+        image_provider=image_provider,
+        media_root=tmp_path,
+    )
+    first = resolve(workflow.execute(run.run_id))
+    resolve(workflow.execute(run.run_id))
+    third = resolve(workflow.execute(run.run_id))
+    exhausted = resolve(workflow.execute(run.run_id))
+
+    assert first.status == third.status == "retryable_failed"
+    assert first.error_code == third.error_code == "IMAGE_PROVIDER_FAILED"
+    assert exhausted.status == "terminal_failed"
+    assert exhausted.error_code == "STAGE_RETRY_EXHAUSTED"
+    assert agent.calls == 1
+    assert image_provider.calls == 3
+
+
+def test_image_generation_enforces_render_time_budget(tmp_path: Path) -> None:
+    repository = InMemoryRepositories()
+    _book_id, project_id, scope_id, _ = seed_pdf_project(repository, tmp_path)
+    run = generation_run(repository, project_id, scope_id)
+    run.budget["max_render_minutes"] = 0
+    repository.runs[run.run_id] = run
+    image_provider = FakeImageProvider()
+
+    result = resolve(
+        GenerationWorkflowService(
+            repository,
+            agent_worker=BrokeredFakeAgent(MangaDirectorToolService(repository, repository)),
+            agentic_enabled=True,
+            image_provider=image_provider,
+            media_root=tmp_path,
+        ).execute(run.run_id)
+    )
+
+    assert result.status == "retryable_failed"
+    assert result.error_code == "RENDER_TIME_BUDGET_EXCEEDED"
+    assert image_provider.calls == 0
+
+
+def test_returned_image_cost_is_checked_before_asset_acceptance(tmp_path: Path) -> None:
+    repository = InMemoryRepositories()
+    _book_id, project_id, scope_id, _ = seed_pdf_project(repository, tmp_path)
+    run = generation_run(repository, project_id, scope_id)
+    run.budget["max_image_cost_usd"] = 2
+    repository.runs[run.run_id] = run
+
+    result = resolve(
+        GenerationWorkflowService(
+            repository,
+            agent_worker=BrokeredFakeAgent(MangaDirectorToolService(repository, repository)),
+            agentic_enabled=True,
+            image_provider=FakeImageProvider(cost_usd=3),
+            media_root=tmp_path,
+        ).execute(run.run_id)
+    )
+
+    assert result.status == "terminal_failed"
+    assert result.error_code == "IMAGE_BUDGET_EXCEEDED"
+    assert not any(
+        item.schema_version in {"image-asset.v1", "asset-set.v1"}
+        for item in repository.artifacts.values()
+    )
+
+
+def test_invalid_manga_plan_is_never_accepted(tmp_path: Path) -> None:
+    repository = InMemoryRepositories()
+    _book_id, project_id, scope_id, _ = seed_pdf_project(repository, tmp_path)
+    run = generation_run(repository, project_id, scope_id)
+    agent = InvalidCandidateAgent()
+
+    result = resolve(
+        GenerationWorkflowService(
+            repository,
+            agent_worker=agent,
+            agentic_enabled=True,
+            image_provider=FakeImageProvider(),
+            media_root=tmp_path,
+        ).execute(run.run_id)
+    )
+
+    assert result.status == "retryable_failed"
+    assert result.error_code == "ARTIFACT_VALIDATION_FAILED"
+    assert agent.calls == 1
+    assert not any(
+        item.kind == "manga_plan" and item.validation_status == "accepted"
+        for item in repository.artifacts.values()
+    )
+
+
+def test_missing_asset_prevents_rendered_page_acceptance(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    repository = InMemoryRepositories()
+    _book_id, project_id, scope_id, _ = seed_pdf_project(repository, tmp_path)
+    run = generation_run(repository, project_id, scope_id)
+    workflow = GenerationWorkflowService(
+        repository,
+        agent_worker=BrokeredFakeAgent(MangaDirectorToolService(repository, repository)),
+        agentic_enabled=True,
+        image_provider=FakeImageProvider(),
+        media_root=tmp_path,
+    )
+    original = workflow._production._persist_immutable_asset
+
+    def persist_then_remove(asset: Any, payload: bytes) -> None:
+        original(asset, payload)
+        workflow._production.resolve_storage_path(asset.storage_ref).unlink()
+
+    monkeypatch.setattr(workflow._production, "_persist_immutable_asset", persist_then_remove)
+
+    result = resolve(workflow.execute(run.run_id))
+
+    assert result.status == "retryable_failed"
+    assert result.error_code == "ARTIFACT_VALIDATION_FAILED"
+    assert not any(
+        item.schema_version.startswith("rendered-page") and item.validation_status == "accepted"
+        for item in repository.artifacts.values()
+    )
 
 
 def test_domain_tools_require_service_auth_and_reject_cross_project_scope(
     tmp_path: Path, monkeypatch: Any
 ) -> None:
     repository = InMemoryRepositories()
-    _book_id, project_id, first_scope_id, _second_scope_id = seed_pdf_project(
-        repository, tmp_path
-    )
+    _book_id, project_id, first_scope_id, _second_scope_id = seed_pdf_project(repository, tmp_path)
     run = generation_run(repository, project_id, first_scope_id)
     run.status = "running"
     run.active_stage = "manga_direction"
@@ -469,9 +862,7 @@ def test_domain_tools_require_service_auth_and_reject_cross_project_scope(
         storage_ref=None,
         content_hash=context.content_hash,
         parent_artifact_ids=[],
-        source_refs=[
-            item.source_ref.model_dump(mode="json") for item in context.source_units
-        ],
+        source_refs=[item.source_ref.model_dump(mode="json") for item in context.source_units],
         model_receipt=None,
         validation_status="accepted",
         validation_report={
@@ -517,14 +908,37 @@ def test_domain_tools_require_service_auth_and_reject_cross_project_scope(
         headers={"authorization": "Bearer test-domain-token-123456"},
         json=cross_project,
     )
+    missing_source_plan = plan_for(context)
+    missing_source_plan["beats"] = missing_source_plan["beats"][:-1]
+    missing_source = client.post(
+        "/internal/v1/agent-tools/submit_manga_plan",
+        headers={"authorization": "Bearer test-domain-token-123456"},
+        json={**body, "arguments": {"plan": missing_source_plan}},
+    )
+    unknown_fact_plan = plan_for(context)
+    unknown_fact_plan["beats"][0]["required_fact_ids"] = ["fact_not_in_context"]
+    unknown_fact = client.post(
+        "/internal/v1/agent-tools/submit_manga_plan",
+        headers={"authorization": "Bearer test-domain-token-123456"},
+        json={**body, "arguments": {"plan": unknown_fact_plan}},
+    )
     accepted = client.post(
+        "/internal/v1/agent-tools/submit_manga_plan",
+        headers={"authorization": "Bearer test-domain-token-123456"},
+        json=body,
+    )
+    repository.stages[stage.stage_run_id].status = "succeeded"
+    inactive = client.post(
         "/internal/v1/agent-tools/submit_manga_plan",
         headers={"authorization": "Bearer test-domain-token-123456"},
         json=body,
     )
 
     assert denied.status_code == 403
+    assert missing_source.status_code == 422
+    assert unknown_fact.status_code == 422
     assert accepted.status_code == 200
+    assert inactive.status_code == 403
     candidate_id = accepted.json()["data"]["artifact_id"]
     assert repository.artifacts[candidate_id].validation_status == "valid"
 
@@ -541,12 +955,23 @@ def test_upload_and_project_http_path_is_live(tmp_path: Path) -> None:
     assert upload.status_code == 202
     book_id = upload.json()["book"]["book_id"]
     assert upload.json()["book"]["status"] == "parsed"
-    assert len(client.get(f"/books/{book_id}/source-units").json()) == 2
+    metadata = client.get(f"/books/{book_id}/source-units").json()
+    assert len(metadata) == 2
+    assert "text" not in metadata[0]
+    assert "text_storage_ref" not in metadata[0]
     assert client.get(f"/books/{book_id}/pages/2").status_code == 200
 
-    project = client.post(
-        f"/books/{book_id}/manga-projects", json={"owner_id": "user_1"}
-    )
+    project = client.post(f"/books/{book_id}/manga-projects", json={"owner_id": "user_1"})
     assert project.status_code == 201
     project_id = project.json()["project_id"]
     assert client.get(f"/manga-projects/{project_id}").status_code == 200
+
+    preflight = client.options(
+        "/upload",
+        headers={
+            "Origin": "http://127.0.0.1:3000",
+            "Access-Control-Request-Method": "POST",
+        },
+    )
+    assert preflight.status_code == 200
+    assert preflight.headers["access-control-allow-origin"] == "http://127.0.0.1:3000"

@@ -84,6 +84,7 @@ export interface AgentRunTrace {
     total: number;
   };
   cost_usd: number;
+  latency_ms: number;
   compaction_count: number;
 }
 

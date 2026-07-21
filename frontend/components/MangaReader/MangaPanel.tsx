@@ -40,10 +40,19 @@ export function MangaPanel({
           sizes={vertical ? "100vw" : "(max-width: 767px) 100vw, 38vw"}
           src={panel.image.src}
           style={{ objectPosition: panel.image.objectPosition }}
+          unoptimized={panel.image.unoptimized}
           width={panel.image.width}
         />
-      ) : (
+      ) : panel.visual ? (
         <MangaPanelArt visual={panel.visual} />
+      ) : (
+        <div className="paper-tone absolute inset-0 grid place-items-center bg-[linear-gradient(145deg,var(--ss-color-paper)_0%,var(--ss-color-paper-soft)_58%,var(--ss-color-ink)_59%,var(--ss-color-ink)_100%)] p-8">
+          {panel.sceneDescription ? (
+            <p className="relative line-clamp-5 max-w-[24rem] overflow-hidden break-words bg-paper-high/90 px-4 py-3 text-center text-xs font-semibold leading-5 text-copy-paper shadow-paper sm:text-sm">
+              {panel.sceneDescription}
+            </p>
+          ) : null}
+        </div>
       )}
       {panel.sfx ? (
         <span className="absolute left-[7%] top-[8%] rotate-[-7deg] font-display text-3xl text-accent-deep drop-shadow-[1px_1px_0_var(--ss-color-paper-high)] sm:text-5xl">

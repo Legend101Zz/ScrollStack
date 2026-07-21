@@ -6,7 +6,7 @@ export function MangaPage({ page }: { page: ReaderPageView }) {
     <section
       aria-label={`Manga page ${page.pageNumber}`}
       className="paper-tone relative mx-auto grid w-full max-w-[46rem] auto-rows-[minmax(11rem,auto)] grid-cols-6 gap-[var(--ss-manga-gutter)] bg-paper p-[var(--ss-manga-gutter)]"
-      dir="rtl"
+      dir={page.readingDirection ?? "rtl"}
     >
       {page.panels.map((panel) => (
         <MangaPanel key={panel.id} panel={panel} />

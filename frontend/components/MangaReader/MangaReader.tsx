@@ -17,6 +17,7 @@ export function MangaReader({ project }: { project: ReaderProjectView }) {
     mode,
     nextPage,
     previousPage,
+    setCurrentPage,
     setMode,
     setModeFromViewport,
     toggleChrome,
@@ -25,7 +26,8 @@ export function MangaReader({ project }: { project: ReaderProjectView }) {
   useEffect(() => {
     const media = window.matchMedia("(max-width: 767px)");
     setModeFromViewport(media.matches ? "vertical" : "rtl");
-  }, [setModeFromViewport]);
+    setCurrentPage(0);
+  }, [project.projectId, setCurrentPage, setModeFromViewport]);
 
   const page = project.pages[currentPage] ?? project.pages[0];
 
