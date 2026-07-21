@@ -10,7 +10,8 @@
 - **Run:** `run_4064f0e265f9d80d6a307806`
 
 This began as a documentation and architecture handoff. Phase 0 and the
-Phase 1 proof/service slice are now implemented in the uncommitted worktree:
+Phase 1 proof/service slice are now implemented and pushed on
+`codex/mrigesh-core-vertical-slice`:
 versioned contracts, the recursive compiler, deterministic validation and SVG
 previews, planning tools/skills, durable artifacts, and a real Mongo-backed
 two-page zero-image proof. Production `GenerationWorkflowService` activation is
@@ -1351,10 +1352,11 @@ Questions that require a product decision before Phase 2:
 
 ## 14. Exact next-session task list
 
-Phase 0 and the Phase 1 proof/service slice are complete in this worktree. The
-next session should review/commit this patch, then wire the two stages into the
-production workflow behind an explicit v2 gate before considering Phase 2. Do
-not spend on images until that activation path and its workflow/API tests pass.
+Phase 0 and the Phase 1 proof/service slice are complete on this branch. The
+next session should wire the two stages into the production workflow behind an
+explicit v2 gate, then run the supplied book only through accepted SVG name
+previews. Do not spend on images until that activation path and its workflow/API
+tests pass and the user has reviewed those previews.
 
 ### Before editing
 
@@ -1561,3 +1563,49 @@ shared frontend surfaces, global styling, root workspace files, and Compose.
 Do not edit Utkarsh-owned `reel-renderer/`, `packages/reel-components/`,
 `frontend/app/**/reels/`, or `frontend/components/ReelFeed/`. Cross-lane changes
 must use reviewed contracts, fixtures, and shared tokens.
+
+## 16. Immediate next session: fresh-book run and feedback capture
+
+### Input
+
+`/Users/comreton/Downloads/hell-yeah-or-no-1nbsped_compress.pdf`
+
+### What is actually left before this book can use the v2 flow
+
+1. Wire `manga_page_writing` and `manga_thumbnail` into
+   `GenerationWorkflowService.execute()` behind an explicit
+   `manga-page-dsl.v2` pipeline version. Preserve the v1 route byte-for-byte.
+2. Compile a fresh bounded `ContextPack` for each new goal, include accepted
+   parent artifacts, enforce stage/project authorization, and require the
+   candidate to have been durably validated by the domain-tool broker.
+3. Stop the v2 workflow after the accepted `ThumbnailSet`, validation report,
+   compiled layouts, and SVG previews. It must not enter asset generation.
+4. Add router/container and workflow tests proving the v2 stage sequence,
+   idempotent resume, zero image attempts, and unchanged v1 behavior.
+5. Ingest the supplied PDF as a fresh project, select a bounded representative
+   scope, run through Manga Director/page writing/thumbnailing, and expose the
+   resulting SVG name previews for user review.
+
+### Feedback protocol
+
+After the previews are shown, stop and ask the user for concrete feedback. When
+feedback arrives:
+
+1. preserve the user's wording in a dated `User feedback` subsection here;
+2. map each item to page/panel/node/text IDs and classify it as story, rhythm,
+   layout, camera/blocking, lettering, visual style, or workflow feedback;
+3. record the fresh project/run/stage/artifact IDs, hashes, exact text-model
+   cost, validation results, screenshots/preview paths, and any failure layer;
+4. replace this section's remaining-work list with the verified current gaps;
+5. do not mark Phase 2 complete merely because the SVG name is accepted;
+6. run the relevant gates, commit the feedback/handoff update, push this same
+   branch, and prove the remote SHA.
+
+### Later work after the user accepts the SVG names
+
+- **Phase 2:** bounded image attempts, reusable assets, scene graph, lettering,
+  deterministic SVG/raster renderer, reader v2 adapter, and v1 compatibility.
+- **Phase 3:** deterministic plus model-assisted QA, typed targeted revisions,
+  immutable successors, and bounded retry/cost policy.
+- **Phase 4:** editor/inspection affordances, mobile/desktop reader acceptance,
+  accessibility, observability, and final side-by-side evidence.
