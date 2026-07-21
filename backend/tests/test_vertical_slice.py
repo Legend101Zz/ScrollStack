@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Coroutine, TypeVar
@@ -26,7 +27,9 @@ from app.services.context_compiler import ContextCompiler
 from app.services.domain_tools import DomainToolRequest, MangaDirectorToolService
 from app.services.errors import InvalidPdfError, InvalidScopeError, NotFoundError, PdfLimitError
 from app.services.generation_workflow import GenerationWorkflowService
+from app.services.hashing import binary_content_hash
 from app.services.image_generation import GeneratedImage, ImageGenerationError
+from app.services.manga_editions import EditionPage, MangaEditionService
 from app.services.memory import MemoryMergeService
 from app.services.page_domain_tools import MangaDomainToolService
 from app.services.pdf_ingestion import PdfIngestionService
@@ -724,6 +727,59 @@ class FakeImageProvider:
         )
 
 
+class ReferenceFakeImageProvider:
+    def __init__(self) -> None:
+        self.calls = 0
+        self.reference_counts: list[int] = []
+
+    async def generate(
+        self,
+        *,
+        prompt: str,
+        model: str,
+        aspect_ratio: str,
+    ) -> GeneratedImage:
+        return await self.generate_with_references(
+            prompt=prompt,
+            model=model,
+            aspect_ratio=aspect_ratio,
+            reference_images=[],
+        )
+
+    async def generate_with_references(
+        self,
+        *,
+        prompt: str,
+        model: str,
+        aspect_ratio: str,
+        reference_images: list[tuple[bytes, str]],
+    ) -> GeneratedImage:
+        assert prompt
+        assert model == "google/gemini-2.5-flash-image"
+        assert aspect_ratio == "2:3"
+        self.calls += 1
+        self.reference_counts.append(len(reference_images))
+        document = pymupdf.open()
+        page = document.new_page(width=400, height=600)
+        shade = (self.calls % 8 + 1) / 10
+        page.draw_rect((30, 30, 370, 570), color=(shade, shade, shade), width=12)
+        page.draw_circle((200, 300), 40 + self.calls, color=(0, 0, 0), width=7)
+        payload = bytes(page.get_pixmap().tobytes("png"))
+        document.close()
+        return GeneratedImage(
+            content=payload,
+            mime_type="image/png",
+            width=400,
+            height=600,
+            provider="openrouter",
+            model=model,
+            input_tokens=100 + self.calls,
+            output_tokens=120 + self.calls,
+            cost_usd=0.02,
+            latency_ms=75,
+        )
+
+
 class InvalidCandidateAgent:
     def __init__(self) -> None:
         self.calls = 0
@@ -779,6 +835,36 @@ def generation_run(
     )
     repository.runs[run.run_id] = run
     return run
+
+
+def test_page_planning_receipts_allow_user_authorized_minimax_m3_fallback(
+    tmp_path: Path,
+) -> None:
+    workflow = GenerationWorkflowService(
+        InMemoryRepositories(),
+        agent_worker=None,
+        agentic_enabled=True,
+        media_root=tmp_path,
+    )
+
+    receipt = workflow._model_receipt(
+        {
+            "provider": "minimax",
+            "model": "MiniMax-M3",
+            "skill_hash": "f" * 64,
+            "tokens": {"input": 120, "output": 80, "total": 200},
+            "cost_usd": 0.01,
+            "latency_ms": 50,
+        },
+        purpose="manga_page_writing",
+        prompt_version="manga-page-writing.v2",
+        input_artifact_ids=["manga_plan_test", "context_test"],
+        attempt=3,
+    )
+
+    assert receipt.provider == "minimax"
+    assert receipt.model == "MiniMax-M3"
+    assert receipt.attempt == 3
 
 
 def test_workflow_completes_accepted_pages_memory_and_is_idempotent(
@@ -1273,6 +1359,117 @@ def test_domain_tools_require_service_auth_and_reject_cross_project_scope(
     assert repository.artifacts[candidate_id].validation_status == "valid"
 
 
+def test_hackathon_plan_accepts_twenty_ordered_representative_sources(
+    tmp_path: Path,
+) -> None:
+    repository = InMemoryRepositories()
+    ingestion = PdfIngestionService(repository, repository, media_root=tmp_path)
+    uploaded = resolve(
+        ingestion.register_upload(
+            filename="full-book.pdf",
+            content=golden_pdf(30),
+            owner_id="user_1",
+        )
+    )
+    project, _ = resolve(
+        MangaProjectService(repository, repository).create(
+            uploaded.book.book_id,
+            owner_id="user_1",
+        )
+    )
+    scope = resolve(
+        ScopeService(repository, repository, repository).create(
+            project_id=project.project_id,
+            book_id=uploaded.book.book_id,
+            page_ranges=[PageRange(page_start=1, page_end=30)],
+            selection_label="Full book",
+            created_by="user_1",
+            created_at=NOW,
+        )
+    )
+    run = generation_run(repository, project.project_id, scope.scope_id)
+    run.pipeline_version = "manga-edition.v1"
+    run.status = "running"
+    run.active_stage = "manga_direction"
+    memory = repository.memory_snapshots[(project.project_id, 0)]
+    context = ContextCompiler().compile(
+        project_id=project.project_id,
+        scope=repository.scopes[scope.scope_id],
+        memory=memory,
+        source_units=resolve(repository.list_source_units(uploaded.book.book_id)),
+        purpose="manga_direction",
+        constraints=constraints(),
+        max_input_tokens=80_000,
+    )
+    context_artifact = construct_document(
+        ArtifactDoc,
+        artifact_id=context.context_pack_id,
+        project_id=project.project_id,
+        run_id=run.run_id,
+        kind="context_pack",
+        schema_version="context-pack.v1",
+        content=context.model_dump(mode="json"),
+        storage_ref=None,
+        content_hash=context.content_hash,
+        parent_artifact_ids=[],
+        source_refs=[item.source_ref.model_dump(mode="json") for item in context.source_units],
+        model_receipt=None,
+        validation_status="accepted",
+        validation_report={"passed": True, "issues": []},
+        created_at=NOW,
+    )
+    repository.artifacts[context_artifact.artifact_id] = context_artifact
+    stage = construct_document(
+        StageRunDoc,
+        stage_run_id="stage_full_book_direction",
+        run_id=run.run_id,
+        stage_name="manga_direction",
+        attempt=1,
+        status="running",
+        input_artifact_ids=[context_artifact.artifact_id],
+        input_hash=context.content_hash,
+        output_artifact_ids=[],
+        idempotency_key="a" * 64,
+        started_at=NOW,
+    )
+    repository.stages[stage.stage_run_id] = stage
+
+    selected_indices = [round(index * 29 / 19) for index in range(20)]
+    plan = plan_for(context)
+    plan["target_page_count"] = 10
+    plan["beats"] = [plan["beats"][index] for index in selected_indices]
+    for sequence, beat in enumerate(plan["beats"]):
+        beat["beat_id"] = f"beat_representative_{sequence:02d}"
+        beat["sequence"] = sequence
+        beat["character_intent"] = []
+
+    accepted = resolve(
+        MangaDirectorToolService(repository, repository).execute(
+            "submit_manga_plan",
+            DomainToolRequest.model_validate(
+                {
+                    "arguments": {"plan": plan},
+                    "scope": {
+                        "correlation_id": "correlation_full_book",
+                        "goal_id": "goal_full_book",
+                        "run_id": run.run_id,
+                        "stage_run_id": stage.stage_run_id,
+                        "context_pack_id": context.context_pack_id,
+                        "project_id": project.project_id,
+                    },
+                }
+            ),
+        )
+    )
+
+    assert accepted.data is not None
+    assert len(context.source_units) == 30
+    cited_ids = {
+        ref["source_unit_id"] for beat in plan["beats"] for ref in beat["source_refs"]
+    }
+    assert len(cited_ids) == 20
+
+
 def test_upload_and_project_http_path_is_live(tmp_path: Path) -> None:
     repository = InMemoryRepositories()
     client = TestClient(create_app(build_services(repository, media_root=tmp_path)))
@@ -1305,3 +1502,240 @@ def test_upload_and_project_http_path_is_live(tmp_path: Path) -> None:
     )
     assert preflight.status_code == 200
     assert preflight.headers["access-control-allow-origin"] == "http://127.0.0.1:3000"
+
+
+def test_deterministic_demo_builds_five_page_edition_without_text_agent(
+    tmp_path: Path,
+) -> None:
+    repository = InMemoryRepositories()
+    book_id, project_id, _first_scope_id, _second_scope_id = seed_pdf_project(
+        repository,
+        tmp_path,
+    )
+    grounded_phrases = {
+        4: "what’s worth doing",
+        5: "All rights reserved",
+        6: "Actions, not words, reveal our real values",
+        7: "There are always more than two options",
+        8: "Obvious to you. Amazing to others.",
+        9: "Whatever scares you, go do it",
+        11: "So I had to make a real change in my life.",
+        13: "What would you do then?",
+        14: "Neither approach is right or wrong, but you need to be aware of the trade-off.",
+        15: "Both are necessary. Neither is right or wrong.",
+    }
+    for key, unit in list(repository.source_units.items()):
+        phrase = grounded_phrases.get(unit.page_start)
+        if phrase is None:
+            continue
+        unit.text = f"{phrase} " + "grounded persisted source context " * 12
+        unit.text_hash = hashlib.sha256(unit.text.encode("utf-8")).hexdigest()
+        unit.token_count = len(unit.text.split())
+        repository.source_units[key] = unit
+    scope = resolve(
+        ScopeService(repository, repository, repository).create(
+            project_id=project_id,
+            book_id=book_id,
+            page_ranges=[PageRange(page_start=1, page_end=15)],
+            selection_label="Deterministic demo pages 1-15",
+            created_by="user_1",
+            created_at=NOW,
+        )
+    )
+    run = generation_run(repository, project_id, scope.scope_id)
+    run.pipeline_version = "manga-demo-deterministic.v1"
+    run.budget = {
+        **run.budget,
+        "max_text_cost_usd": 0,
+        "max_image_cost_usd": 2,
+        "max_sprites": 1,
+        "max_key_panels": 10,
+    }
+    repository.runs[run.run_id] = run
+    provider = ReferenceFakeImageProvider()
+    workflow = GenerationWorkflowService(
+        repository,
+        agent_worker=None,
+        agentic_enabled=False,
+        image_provider=provider,
+        media_root=tmp_path,
+    )
+
+    result = resolve(workflow.execute(run.run_id))
+    repeated = resolve(workflow.execute(run.run_id))
+    artifacts = resolve(repository.list_artifacts(run.run_id, accepted_only=False))
+    assert result.status == "succeeded", [
+        item.validation_report
+        for item in artifacts
+        if item.kind == "thumbnail_set"
+    ]
+    plan = next(
+        item
+        for item in artifacts
+        if item.kind == "manga_plan" and item.validation_status == "accepted"
+    )
+    script = next(item for item in artifacts if item.kind == "page_script_set")
+    edition_artifact = next(item for item in artifacts if item.kind == "manga_edition")
+    rendered = [
+        item
+        for item in artifacts
+        if item.kind == "rendered_page" and item.schema_version == "rendered-page.v2"
+    ]
+
+    assert result.status == "succeeded"
+    assert repeated.status == "succeeded"
+    assert provider.calls == 11
+    assert provider.reference_counts == [0, *([1] * 10)]
+    assert plan.author == "system"
+    assert plan.model_receipt is None
+    assert script.author == "system"
+    assert script.model_receipt is None
+    script_content = PageScriptSet.model_validate(script.content)
+    assert len(script_content.pages) == 5
+    assert [len(page.panels) for page in script_content.pages] == [2] * 5
+    assert all(
+        len(panel.source_refs) == 1
+        for page in script_content.pages
+        for panel in page.panels
+    )
+    assert len(rendered) == 5
+    assert edition_artifact.content is not None
+    assert edition_artifact.content["text_cost_usd"] == 0
+    assert edition_artifact.content["image_cost_usd"] == pytest.approx(0.22)
+    assert edition_artifact.content["accepted_panel_images"] == 10
+    assert edition_artifact.content["accepted_image_attempts"] == 11
+    assert edition_artifact.content["rejected_image_attempts"] == 0
+    assert len(edition_artifact.content["image_attempt_artifact_ids"]) == 11
+    for page in edition_artifact.content["pages"]:
+        image_path = tmp_path / f"{page['content_hash']}.png"
+        pixmap = pymupdf.Pixmap(image_path)
+        assert (pixmap.width, pixmap.height) == (1200, 1800)
+
+
+def test_immutable_manga_editions_survive_a_fresh_service_instance(tmp_path: Path) -> None:
+    repository = InMemoryRepositories()
+    book_id, project_id, scope_id, _ = seed_pdf_project(repository, tmp_path)
+    run = generation_run(repository, project_id, scope_id)
+    page_bytes = golden_png()
+    page_hash = binary_content_hash(page_bytes)
+    (tmp_path / f"{page_hash}.png").write_bytes(page_bytes)
+    page = EditionPage(
+        page_index=0,
+        page_id="golden_page_0",
+        rendered_page_artifact_id="rendered_page_golden_0",
+        raster_asset_id="asset_page_golden_0",
+        content_hash=page_hash,
+        width=400,
+        height=600,
+    )
+    service = MangaEditionService(repository, media_root=tmp_path)
+    first = MangaEditionService.draft(
+        book_id=book_id,
+        project_id=project_id,
+        run_id=run.run_id,
+        scope_id=scope_id,
+        title="The Last Observatory: Edition One",
+        pages=[page],
+        plan_artifact_id="manga_plan_golden",
+        script_artifact_id="page_script_set_golden",
+        thumbnail_artifact_id="thumbnail_set_golden",
+        character_reference_artifact_id="image_asset_character_reference",
+        character_reference_attempt_id="image_attempt_character_reference",
+        character_reference_asset_id="asset_character_reference",
+        panel_asset_ids=["asset_panel_golden"],
+        image_attempt_artifact_ids=[
+            "image_attempt_character_reference",
+            "image_attempt_panel_golden",
+        ],
+        image_asset_artifact_ids=[
+            "image_asset_character_reference",
+            "image_asset_panel_golden",
+        ],
+        receipt_artifact_ids=["receipt_character_reference", "receipt_panel_golden"],
+        image_provider="openrouter",
+        image_model="google/gemini-2.5-flash-image",
+        renderer_version="test-renderer.v1",
+        implementation_version="test-edition.v1",
+        parent_edition_id=None,
+        text_cost_usd=0.12,
+        image_cost_usd=0.8,
+        accepted_panel_images=1,
+        accepted_image_attempts=2,
+        rejected_image_attempts=0,
+        created_at=NOW,
+    )
+    resolve(
+        service.persist(
+            first,
+            stage_run_id="stage_edition_first",
+            parent_artifact_ids=["rendered_page_golden_0"],
+            source_refs=[],
+        )
+    )
+    second = MangaEditionService.draft(
+        book_id=book_id,
+        project_id=project_id,
+        run_id=run.run_id,
+        scope_id=scope_id,
+        title="The Last Observatory: Edition Two",
+        pages=[page],
+        plan_artifact_id="manga_plan_golden",
+        script_artifact_id="page_script_set_golden",
+        thumbnail_artifact_id="thumbnail_set_golden",
+        character_reference_artifact_id="image_asset_character_reference",
+        character_reference_attempt_id="image_attempt_character_reference",
+        character_reference_asset_id="asset_character_reference",
+        panel_asset_ids=["asset_panel_golden"],
+        image_attempt_artifact_ids=[
+            "image_attempt_character_reference",
+            "image_attempt_panel_rejected",
+            "image_attempt_panel_golden",
+        ],
+        image_asset_artifact_ids=[
+            "image_asset_character_reference",
+            "image_asset_panel_rejected",
+            "image_asset_panel_golden",
+        ],
+        receipt_artifact_ids=[
+            "receipt_character_reference",
+            "receipt_panel_rejected",
+            "receipt_panel_golden",
+        ],
+        image_provider="openrouter",
+        image_model="google/gemini-2.5-flash-image",
+        renderer_version="test-renderer.v1",
+        implementation_version="test-edition.v1",
+        parent_edition_id=first.edition_id,
+        text_cost_usd=0.13,
+        image_cost_usd=0.84,
+        accepted_panel_images=1,
+        accepted_image_attempts=2,
+        rejected_image_attempts=1,
+        created_at=NOW.replace(hour=13),
+    )
+    resolve(
+        service.persist(
+            second,
+            stage_run_id="stage_edition_second",
+            parent_artifact_ids=[first.edition_id, "rendered_page_golden_0"],
+            source_refs=[],
+        )
+    )
+
+    fresh_client = TestClient(create_app(build_services(repository, media_root=tmp_path)))
+    library = fresh_client.get("/library", params={"owner_id": "user_1"})
+    edition = fresh_client.get(f"/manga/{second.edition_id}")
+    media = fresh_client.get(f"/media/{page_hash}.png")
+
+    assert library.status_code == 200
+    assert [item["edition_id"] for item in library.json()] == [
+        second.edition_id,
+        first.edition_id,
+    ]
+    assert [item["current_edition"] for item in library.json()] == [True, False]
+    assert edition.status_code == 200
+    assert edition.json()["page_count"] == 1
+    assert edition.json()["pages"][0]["content_hash"] == page_hash
+    assert media.status_code == 200
+    assert media.content == page_bytes
+    assert media.headers["etag"] == f'"{page_hash}"'

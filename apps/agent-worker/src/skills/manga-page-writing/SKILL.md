@@ -1,7 +1,7 @@
 ---
 name: manga-page-writing
 description: Write source-grounded page scripts before layout or image generation.
-version: 1.1.0
+version: 1.2.0
 ---
 
 # Manga page writing
@@ -87,6 +87,32 @@ For the Phase 1 two-page goal backed by a three-beat MangaPlan:
 
 Do not add panels or lettering merely to make the script look complete. The
 thumbnail stage, not this stage, owns layout geometry.
+
+## Full-book hackathon edition
+
+When the typed goal asks for `target_page_count: 10` and the accepted MangaPlan
+contains twenty beats:
+
+- create exactly ten pages with indices `0` through `9`;
+- create exactly two panels on every page and map all twenty beats once each in
+  source order;
+- keep every panel's complete accepted source references;
+- use `char_kai` as the recurring dramatized narrator when the accepted plan
+  includes that character intent;
+- keep Kai visually actionable in blocking: short wavy black hair, one white
+  forelock above the right eyebrow, round wire glasses, dark zip jacket, light
+  crew-neck shirt;
+- add one or two short text elements per page. Prefer concise narration or
+  dialogue that advances the idea rather than restating the image;
+- reserve real regions for deterministic lettering and keep focal subjects out
+  of those regions;
+- make the second panel of each page the page-turn panel;
+- vary camera scale and tempo across adjacent panels without inventing source
+  facts;
+- do not create layout trees or request image generation.
+
+The full-book edition is still bounded. Do not add an eleventh page, a twenty-
+first panel, or a third panel to any page.
 
 ## Hard rules
 

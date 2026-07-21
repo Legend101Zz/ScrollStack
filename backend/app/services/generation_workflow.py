@@ -29,17 +29,29 @@ from app.persistence.protocols import Repositories
 
 from .agent_worker import AgentWorkerError, AgentWorkerGateway
 from .context_compiler import ContextCompiler
+from .deterministic_manga_demo import (
+    DETERMINISTIC_DEMO_PAGE_COUNT,
+    DETERMINISTIC_DEMO_PANEL_COUNT,
+    DETERMINISTIC_DEMO_PIPELINE,
+    DETERMINISTIC_DEMO_VERSION,
+    DeterministicMangaDemoBuilder,
+)
+from .domain_tools import DomainToolRequest, MangaDirectorToolService
 from .errors import ArtifactValidationError, NotFoundError
+from .hackathon_manga import HACKATHON_PAGE_COUNT, HACKATHON_PANEL_COUNT, HackathonMangaService
 from .hashing import content_hash
 from .image_generation import APPROVED_OPENROUTER_IMAGE_MODEL, ImageGenerationGateway
+from .manga_page_planning import MangaPagePlanningService
 from .manga_production import MangaProductionService
 from .memory import MemoryMergeService
 
 REQUIRED_MANGA_DIRECTOR_PROVIDER = "minimax"
 REQUIRED_MANGA_DIRECTOR_MODEL = "MiniMax-M2.7-highspeed"
 ACCEPTED_MANGA_DIRECTION_MODELS = {"MiniMax-M3", REQUIRED_MANGA_DIRECTOR_MODEL}
+ACCEPTED_MANGA_PLANNING_MODELS = {"MiniMax-M3", REQUIRED_MANGA_DIRECTOR_MODEL}
 MANGA_PIPELINE_V1 = "manga-pipeline.v1"
 MANGA_PAGE_DSL_V2 = "manga-page-dsl.v2"
+MANGA_EDITION_V1 = "manga-edition.v1"
 PlanningPurpose = Literal["manga_page_writing", "manga_thumbnail"]
 
 
@@ -92,6 +104,18 @@ class GenerationWorkflowService:
             image_model=image_model,
             max_reserved_cost_per_asset_usd=max_reserved_cost_per_asset_usd,
         )
+        self._hackathon = HackathonMangaService(
+            repositories,
+            image_provider=image_provider,  # type: ignore[arg-type]
+            media_root=media_root,
+            image_model=image_model,
+        )
+        self._deterministic_demo = DeterministicMangaDemoBuilder()
+        self._page_planning = MangaPagePlanningService(
+            repositories,
+            repositories,
+            media_root=media_root,
+        )
 
     async def execute(self, run_id: str) -> WorkflowExecutionResult:
         run = await self._repositories.get_run(run_id)
@@ -113,7 +137,12 @@ class GenerationWorkflowService:
                 error_code=error_code,
             )
 
-        if run.pipeline_version not in {MANGA_PIPELINE_V1, MANGA_PAGE_DSL_V2}:
+        if run.pipeline_version not in {
+            MANGA_PIPELINE_V1,
+            MANGA_PAGE_DSL_V2,
+            MANGA_EDITION_V1,
+            DETERMINISTIC_DEMO_PIPELINE,
+        }:
             return await self._fail_without_stage(
                 run,
                 stage_name="pipeline_routing",
@@ -134,6 +163,13 @@ class GenerationWorkflowService:
                 run,
                 stage_name="context_compilation",
                 error=error,
+            )
+
+        if run.pipeline_version == DETERMINISTIC_DEMO_PIPELINE:
+            return await self._execute_deterministic_demo(
+                run,
+                context_artifact=context_artifact,
+                context=context,
             )
 
         if not self._agentic_enabled or self._agent_worker is None:
@@ -158,6 +194,12 @@ class GenerationWorkflowService:
 
         if run.pipeline_version == MANGA_PAGE_DSL_V2:
             return await self._execute_page_dsl_v2(
+                run,
+                manga_plan_artifact=manga_plan_artifact,
+            )
+
+        if run.pipeline_version == MANGA_EDITION_V1:
+            return await self._execute_hackathon_edition(
                 run,
                 manga_plan_artifact=manga_plan_artifact,
             )
@@ -220,14 +262,23 @@ class GenerationWorkflowService:
                 f"Memory snapshot {run.project_id}@{run.memory_version} does not exist"
             )
         units = await self._repositories.list_source_units(project.book_id)
+        deterministic_demo = run.pipeline_version == DETERMINISTIC_DEMO_PIPELINE
         constraints = GenerationConstraints(
             image_mode="budgeted",
-            max_pages=10,
+            max_pages=(
+                DETERMINISTIC_DEMO_PAGE_COUNT
+                if deterministic_demo
+                else HACKATHON_PAGE_COUNT
+            ),
             max_panels_per_page=7,
             max_sprites=int(run.budget["max_sprites"]),
-            max_key_panels=int(run.budget["max_key_panels"]),
+            max_key_panels=(
+                DETERMINISTIC_DEMO_PANEL_COUNT
+                if deterministic_demo
+                else int(run.budget["max_key_panels"])
+            ),
             reading_direction="rtl",
-            narration_enabled=False,
+            narration_enabled=deterministic_demo,
         )
         required_fact_ids = {
             str(item["fact_id"]) for item in memory.facts if isinstance(item.get("fact_id"), str)
@@ -324,6 +375,7 @@ class GenerationWorkflowService:
                 "Succeeded Manga Director stage lacks an accepted MiniMax receipt"
             )
 
+        hackathon_edition = run.pipeline_version == MANGA_EDITION_V1
         goal = AgentGoal(
             goal_id=f"goal_{stage.idempotency_key[:20]}_{stage.attempt}",
             run_id=run.run_id,
@@ -366,7 +418,7 @@ class GenerationWorkflowService:
                 max_steps=int(run.budget["max_agent_steps"]),
                 max_tool_calls=max(4, int(run.budget["max_agent_steps"]) * 2),
                 max_input_tokens=80_000,
-                max_output_tokens=16_000,
+                max_output_tokens=24_000 if hackathon_edition else 16_000,
                 max_repair_attempts=int(run.budget["max_repair_attempts"]),
                 max_cost_usd=float(run.budget["max_text_cost_usd"]),
             ),
@@ -377,11 +429,25 @@ class GenerationWorkflowService:
             goal,
             context,
             instructions=(
-                "Produce only the grounded two-page MangaPlan vertical slice. Set "
-                "target_page_count to exactly 2 and create exactly three beats: one for each "
-                "selected source unit in source order. Copy complete source_ref objects from "
-                "the ContextPack and keep absent canon, character, and durable-update lists "
-                "empty. Do not request images or compose RenderedPage output in this run."
+                (
+                    "Create the complete condensed hackathon adaptation of the entire selected "
+                    "book. Set target_page_count to exactly 10 and create exactly 20 beats, two "
+                    "beats per page. Cover every major section of the supplied scope from opening "
+                    "through Saying Yes. Cite exactly one representative source_ref per beat: "
+                    "twenty distinct ContextPack units in page order that span the beginning "
+                    "through the end of the book. Do not copy all 131 source refs into the plan; "
+                    "the accepted ContextPack remains the immutable full-source lineage parent. "
+                    "Keep every factual claim grounded in its copied source_ref object and keep "
+                    "character_intent empty because the ContextPack has no canonical characters. "
+                    "Do not request images or compose RenderedPage output in this run."
+                    if hackathon_edition
+                    else
+                    "Produce only the grounded two-page MangaPlan vertical slice. Set "
+                    "target_page_count to exactly 2 and create exactly three beats: one for each "
+                    "selected source unit in source order. Copy complete source_ref objects from "
+                    "the ContextPack and keep absent canon, character, and durable-update lists "
+                    "empty. Do not request images or compose RenderedPage output in this run."
+                )
             ),
         )
         try:
@@ -391,6 +457,13 @@ class GenerationWorkflowService:
                 f"Agent worker candidate failed MangaPlan validation: {error}"
             ) from error
         payload = plan.model_dump(mode="json")
+        if hackathon_edition and (
+            plan.target_page_count != HACKATHON_PAGE_COUNT
+            or len(plan.beats) != HACKATHON_PANEL_COUNT
+        ):
+            raise ArtifactValidationError(
+                "Hackathon MangaPlan must contain ten pages and twenty grounded beats"
+            )
         digest = content_hash(payload)
         candidate_id = f"candidate_manga_plan_{digest[:24]}"
         candidate = await self._repositories.get_artifact(candidate_id)
@@ -563,6 +636,272 @@ class GenerationWorkflowService:
             )
         return await self._succeed_run(run)
 
+    async def _execute_hackathon_edition(
+        self,
+        run: GenerationRunDoc,
+        *,
+        manga_plan_artifact: ArtifactDoc,
+        script_artifact: ArtifactDoc | None = None,
+    ) -> WorkflowExecutionResult:
+        try:
+            if script_artifact is None:
+                writing_context_artifact, writing_context = await self._compile_planning_context(
+                    run,
+                    purpose="manga_page_writing",
+                    parent_artifacts=[manga_plan_artifact],
+                )
+                script_artifact = await self._run_page_writing(
+                    run,
+                    manga_plan_artifact=manga_plan_artifact,
+                    context_artifact=writing_context_artifact,
+                    context=writing_context,
+                )
+            thumbnail_stage = await self._start_stage(
+                run,
+                "manga_thumbnail",
+                input_artifact_ids=[script_artifact.artifact_id],
+                input_hash=script_artifact.content_hash,
+                schema_version="thumbnail-set.v1",
+                prompt_version="deterministic-hackathon-layouts.v1",
+            )
+            image_stage = await self._start_stage(
+                run,
+                "asset_generation",
+                input_artifact_ids=[manga_plan_artifact.artifact_id, script_artifact.artifact_id],
+                input_hash=content_hash(
+                    {
+                        "plan": manga_plan_artifact.content_hash,
+                        "script": script_artifact.content_hash,
+                        "model": self._image_model,
+                    }
+                ),
+                schema_version="image-attempt.v1",
+                prompt_version="hackathon-manga-panel.v1",
+            )
+            composition_stage = await self._start_stage(
+                run,
+                "manga_composition",
+                input_artifact_ids=[script_artifact.artifact_id],
+                input_hash=content_hash(
+                    {
+                        "script": script_artifact.content_hash,
+                        "renderer": "deterministic-svg-letterer.v1",
+                    }
+                ),
+                schema_version="manga-edition.v1",
+                prompt_version="deterministic-svg-letterer.v1",
+            )
+            result = await self._hackathon.produce(
+                run,
+                plan_artifact=manga_plan_artifact,
+                script_artifact=script_artifact,
+                thumbnail_stage_run_id=thumbnail_stage.stage_run_id,
+                image_stage_run_id=image_stage.stage_run_id,
+                composition_stage_run_id=composition_stage.stage_run_id,
+                expected_page_count=(
+                    DETERMINISTIC_DEMO_PAGE_COUNT
+                    if run.pipeline_version == DETERMINISTIC_DEMO_PIPELINE
+                    else HACKATHON_PAGE_COUNT
+                ),
+                expected_panel_count=(
+                    DETERMINISTIC_DEMO_PANEL_COUNT
+                    if run.pipeline_version == DETERMINISTIC_DEMO_PIPELINE
+                    else HACKATHON_PANEL_COUNT
+                ),
+            )
+            await self._succeed_stage(
+                run,
+                thumbnail_stage,
+                [
+                    result.planning.thumbnail_artifact.artifact_id,
+                    result.planning.report_artifact.artifact_id,
+                    *[item.artifact_id for item in result.planning.compiled_artifacts],
+                    *[item.artifact_id for item in result.planning.preview_artifacts],
+                ],
+            )
+            await self._succeed_stage(
+                run,
+                image_stage,
+                [item.artifact_id for item in result.image_attempt_artifacts],
+            )
+            await self._succeed_stage(
+                run,
+                composition_stage,
+                [
+                    *[item.artifact_id for item in result.rendered_page_artifacts],
+                    result.edition_artifact.artifact_id,
+                ],
+            )
+            return await self._succeed_run(run)
+        except Exception as error:
+            return await self._fail_without_stage(
+                run,
+                stage_name=run.active_stage or "manga_edition",
+                error=error,
+                input_artifact_ids=[manga_plan_artifact.artifact_id],
+            )
+
+    async def _execute_deterministic_demo(
+        self,
+        run: GenerationRunDoc,
+        *,
+        context_artifact: ArtifactDoc,
+        context: ContextPack,
+    ) -> WorkflowExecutionResult:
+        try:
+            plan_artifact = await self._run_deterministic_demo_direction(
+                run,
+                context_artifact=context_artifact,
+                context=context,
+            )
+            script_artifact = await self._run_deterministic_demo_page_writing(
+                run,
+                context_artifact=context_artifact,
+                context=context,
+                plan_artifact=plan_artifact,
+            )
+        except Exception as error:
+            return await self._fail_without_stage(
+                run,
+                stage_name=run.active_stage or "deterministic_demo_planning",
+                error=error,
+                input_artifact_ids=[context_artifact.artifact_id],
+            )
+        return await self._execute_hackathon_edition(
+            run,
+            manga_plan_artifact=plan_artifact,
+            script_artifact=script_artifact,
+        )
+
+    async def _run_deterministic_demo_direction(
+        self,
+        run: GenerationRunDoc,
+        *,
+        context_artifact: ArtifactDoc,
+        context: ContextPack,
+    ) -> ArtifactDoc:
+        stage = await self._start_stage(
+            run,
+            "manga_direction",
+            input_artifact_ids=[context_artifact.artifact_id],
+            input_hash=context_artifact.content_hash,
+            schema_version="manga-plan.v1",
+            prompt_version=DETERMINISTIC_DEMO_VERSION,
+        )
+        if stage.status == "succeeded" and stage.output_artifact_ids:
+            return await self._accepted_stage_output(
+                stage,
+                kind="manga_plan",
+                require_minimax_receipt=False,
+            )
+        plan = self._deterministic_demo.build_plan(context)
+        payload = plan.model_dump(mode="json")
+        await MangaDirectorToolService(
+            self._repositories,
+            self._repositories,
+        ).execute(
+            "submit_manga_plan",
+            DomainToolRequest.model_validate(
+                {
+                    "arguments": {"plan": payload},
+                    "scope": {
+                        "correlation_id": f"deterministic_{stage.stage_run_id}",
+                        "goal_id": f"system_{stage.stage_run_id}",
+                        "run_id": run.run_id,
+                        "stage_run_id": stage.stage_run_id,
+                        "context_pack_id": context.context_pack_id,
+                        "project_id": run.project_id,
+                    },
+                }
+            ),
+        )
+        digest = content_hash(payload)
+        candidate = await self._repositories.get_artifact(
+            f"candidate_manga_plan_{digest[:24]}"
+        )
+        if candidate is None or candidate.validation_status != "valid":
+            raise ArtifactValidationError(
+                "Deterministic MangaPlan did not pass the canonical domain validator"
+            )
+        accepted = construct_document(
+            ArtifactDoc,
+            artifact_id=f"manga_plan_{digest[:24]}",
+            project_id=run.project_id,
+            run_id=run.run_id,
+            stage_run_id=stage.stage_run_id,
+            kind="manga_plan",
+            schema_version="manga-plan.v1",
+            content=payload,
+            storage_ref=None,
+            content_hash=digest,
+            parent_artifact_ids=[context_artifact.artifact_id, candidate.artifact_id],
+            author="system",
+            supersedes_artifact_id=None,
+            source_refs=candidate.source_refs,
+            model_receipt=None,
+            validation_status="accepted",
+            validation_report={
+                "passed": True,
+                "issues": [],
+                "validator_version": "manga-plan-validator.v1",
+                "implementation_version": DETERMINISTIC_DEMO_VERSION,
+                "text_model_executed": False,
+            },
+            created_at=utc_now(),
+        )
+        stored = await self._repositories.save_artifact(accepted)
+        await self._succeed_stage(run, stage, [stored.artifact_id])
+        return stored
+
+    async def _run_deterministic_demo_page_writing(
+        self,
+        run: GenerationRunDoc,
+        *,
+        context_artifact: ArtifactDoc,
+        context: ContextPack,
+        plan_artifact: ArtifactDoc,
+    ) -> ArtifactDoc:
+        inputs = [plan_artifact.artifact_id, context_artifact.artifact_id]
+        stage = await self._start_stage(
+            run,
+            "manga_page_writing",
+            input_artifact_ids=inputs,
+            input_hash=content_hash(
+                {
+                    "plan": plan_artifact.content_hash,
+                    "context": context_artifact.content_hash,
+                    "implementation": DETERMINISTIC_DEMO_VERSION,
+                }
+            ),
+            schema_version="page-script-set.v1",
+            prompt_version=DETERMINISTIC_DEMO_VERSION,
+        )
+        if stage.status == "succeeded" and stage.output_artifact_ids:
+            return await self._accepted_stage_output(
+                stage,
+                kind="page_script_set",
+                require_minimax_receipt=False,
+            )
+        script_set = self._deterministic_demo.build_script_set(
+            context,
+            plan_artifact_id=plan_artifact.artifact_id,
+        )
+        stored = await self._page_planning.submit_page_script_set(
+            run_id=run.run_id,
+            stage_run_id=stage.stage_run_id,
+            plan_artifact_id=plan_artifact.artifact_id,
+            script_set=script_set,
+            context_pack_id=context.context_pack_id,
+            author="system",
+            implementation_version=DETERMINISTIC_DEMO_VERSION,
+        )
+        if stored.model_receipt is not None:
+            raise ArtifactValidationError(
+                "Deterministic PageScriptSet must not carry a model receipt"
+            )
+        await self._succeed_stage(run, stage, [stored.artifact_id])
+        return stored
+
     async def _compile_planning_context(
         self,
         run: GenerationRunDoc,
@@ -592,12 +931,13 @@ class GenerationWorkflowService:
                     "run lineage"
                 )
         units = await self._repositories.list_source_units(project.book_id)
+        hackathon_edition = run.pipeline_version == MANGA_EDITION_V1
         constraints = GenerationConstraints(
             image_mode="budgeted",
-            max_pages=2,
+            max_pages=HACKATHON_PAGE_COUNT if hackathon_edition else 2,
             max_panels_per_page=7,
-            max_sprites=0,
-            max_key_panels=0,
+            max_sprites=1 if hackathon_edition else 0,
+            max_key_panels=HACKATHON_PANEL_COUNT if hackathon_edition else 0,
             reading_direction="rtl",
             narration_enabled=True,
         )
@@ -708,6 +1048,9 @@ class GenerationWorkflowService:
                 kind="page_script_set",
                 require_minimax_receipt=True,
             )
+        hackathon_edition = run.pipeline_version == MANGA_EDITION_V1
+        target_pages = HACKATHON_PAGE_COUNT if hackathon_edition else 2
+        target_panels = HACKATHON_PANEL_COUNT if hackathon_edition else 4
         goal = AgentGoal(
             goal_id=f"goal_{stage.idempotency_key[:20]}_{stage.attempt}",
             run_id=run.run_id,
@@ -720,7 +1063,7 @@ class GenerationWorkflowService:
                 self._artifact_ref(manga_plan_artifact),
             ],
             constraints={
-                "target_page_count": 2,
+                "target_page_count": target_pages,
                 "max_panels_per_page": 7,
                 "reading_direction": "rtl",
                 "image_attempts_allowed": 0,
@@ -746,13 +1089,25 @@ class GenerationWorkflowService:
             goal,
             context,
             instructions=(
-                "Create exactly two source-grounded manga pages with exactly three panels total: "
-                "two panels on page 0 and one payoff panel on page 1. Map the three accepted "
-                "MangaPlan beats once each in source order. Use empty blocking, prop, focal, "
-                "avoid-text, source-fact, and text-element lists when no accepted character, "
-                "asset, fact, or speaker exists. Use the exact accepted MangaPlan artifact ID "
-                "and this fresh ContextPack ID. Fetch the accepted MangaPlan at most once. Do "
-                "not create layouts, request assets, or call an image model."
+                (
+                    "Create exactly ten source-grounded manga pages with exactly twenty panels "
+                    "total, two panels per page. Map the twenty accepted MangaPlan beats once "
+                    "each in source order. Use char_kai as the recurring narrator in blocking "
+                    "and as the speaker only where dialogue is useful. Give every page one or "
+                    "two short deterministic text elements, using concise narration, dialogue, "
+                    "or SFX that fits the planned region. Preserve the full source_ref objects. "
+                    "Use the exact accepted MangaPlan artifact ID and fresh ContextPack ID. Do "
+                    "not create layouts, request assets, or call an image model."
+                    if hackathon_edition
+                    else
+                    "Create exactly two source-grounded manga pages with exactly four panels "
+                    "total: two panels on each page. Map the accepted MangaPlan beats across "
+                    "the four panels in source order. Use empty blocking, prop, "
+                    "focal, avoid-text, source-fact, and text-element lists when no accepted "
+                    "character, asset, fact, or speaker exists. Use the exact accepted MangaPlan "
+                    "artifact ID and this fresh ContextPack ID. Fetch the accepted MangaPlan at "
+                    "most once. Do not create layouts, request assets, or call an image model."
+                )
             ),
         )
         try:
@@ -765,7 +1120,8 @@ class GenerationWorkflowService:
             script_set.project_id != run.project_id
             or script_set.plan_artifact_id != manga_plan_artifact.artifact_id
             or script_set.context_pack_id != context.context_pack_id
-            or len(script_set.pages) != 2
+            or len(script_set.pages) != target_pages
+            or sum(len(page.panels) for page in script_set.pages) != target_panels
         ):
             raise ArtifactValidationError("PageScriptSet candidate violates the v2 run identity")
         payload = script_set.model_dump(mode="json")
@@ -994,12 +1350,12 @@ class GenerationWorkflowService:
                 and (
                     receipt is None
                     or receipt.get("provider") != REQUIRED_MANGA_DIRECTOR_PROVIDER
-                    or receipt.get("model") != REQUIRED_MANGA_DIRECTOR_MODEL
+                    or receipt.get("model") not in ACCEPTED_MANGA_PLANNING_MODELS
                 )
             )
         ):
             raise ArtifactValidationError(
-                f"Succeeded {stage.stage_name} stage lacks its accepted MiniMax M3 output"
+                f"Succeeded {stage.stage_name} stage lacks an accepted MiniMax output"
             )
         return artifact
 
@@ -1081,14 +1437,14 @@ class GenerationWorkflowService:
         tokens = trace.get("tokens")
         if (
             provider != REQUIRED_MANGA_DIRECTOR_PROVIDER
-            or model != REQUIRED_MANGA_DIRECTOR_MODEL
+            or model not in ACCEPTED_MANGA_PLANNING_MODELS
             or not isinstance(skill_hash, str)
             or not skill_hash
             or not isinstance(tokens, dict)
         ):
             raise ArtifactValidationError(
                 f"{purpose} must record provider=minimax, "
-                "model=MiniMax-M2.7-highspeed, and skill provenance"
+                "an approved MiniMax text model, and skill provenance"
             )
         input_tokens = self._optional_int(tokens.get("input"))
         output_tokens = self._optional_int(tokens.get("output"))
@@ -1128,7 +1484,9 @@ class GenerationWorkflowService:
             max_steps=min(8, int(run.budget["max_agent_steps"])),
             max_tool_calls=min(10, max(4, int(run.budget["max_agent_steps"]))),
             max_input_tokens=80_000,
-            max_output_tokens=8_000,
+            max_output_tokens=(
+                24_000 if run.pipeline_version == MANGA_EDITION_V1 else 8_000
+            ),
             max_repair_attempts=int(run.budget["max_repair_attempts"]),
             max_cost_usd=float(run.budget["max_text_cost_usd"]),
         )

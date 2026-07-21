@@ -97,6 +97,61 @@ export type MangaReaderPayload = {
   scope_id: string;
 };
 
+export type LibraryEdition = {
+  edition_id: string;
+  book_id: string;
+  project_id: string;
+  title: string;
+  status: "accepted";
+  page_count: number;
+  cover_url: string;
+  created_at: string;
+  current_edition: boolean;
+};
+
+export type MangaEditionView = {
+  edition_id: string;
+  book_id: string;
+  project_id: string;
+  run_id: string;
+  scope_id: string;
+  title: string;
+  status: "accepted";
+  page_count: number;
+  pages: Array<{
+    page_index: number;
+    page_id: string;
+    rendered_page_artifact_id: string;
+    raster_asset_id: string;
+    content_hash: string;
+    width: number;
+    height: number;
+    url: string;
+  }>;
+  cover_url: string;
+  plan_artifact_id: string;
+  script_artifact_id: string;
+  thumbnail_artifact_id: string;
+  character_reference_artifact_id: string;
+  character_reference_attempt_id: string;
+  character_reference_asset_id: string;
+  panel_asset_ids: string[];
+  image_attempt_artifact_ids: string[];
+  image_asset_artifact_ids: string[];
+  receipt_artifact_ids: string[];
+  image_provider: "openrouter";
+  image_model: string;
+  renderer_version: string;
+  implementation_version: string;
+  parent_edition_id: string | null;
+  text_cost_usd: number;
+  image_cost_usd: number;
+  accepted_panel_images: number;
+  accepted_image_attempts: number;
+  rejected_image_attempts: number;
+  created_at: string;
+};
+
 type ApiErrorPayload = {
   error?: {
     code?: string;
@@ -134,6 +189,10 @@ function publicApiUrl(path: string): string {
     throw new ApiError("The public ScrollStack API is not configured.", 500, "api_not_configured");
   }
   return `${baseUrl.replace(/\/$/, "")}/${path.replace(/^\//, "")}`;
+}
+
+export function editionAssetUrl(path: string): string {
+  return publicApiUrl(path);
 }
 
 function errorMessage(payload: ApiErrorPayload | null, status: number): string {
@@ -259,16 +318,16 @@ export function startGenerationRun(
       body: JSON.stringify({
         budget: {
           max_agent_steps: 20,
-          max_image_cost_usd: 8,
-          max_key_panels: 2,
+          max_image_cost_usd: 2,
+          max_key_panels: 20,
           max_reels: 0,
           max_render_minutes: 5,
           max_repair_attempts: 2,
-          max_sprites: 8,
+          max_sprites: 1,
           max_text_cost_usd: 3,
         },
         created_by: createdBy,
-        pipeline_version: "manga-pipeline.v1",
+        pipeline_version: "manga-edition.v1",
         requested_outputs: ["manga"],
         scope_id: scopeId,
       }),
@@ -412,4 +471,18 @@ export async function loadReaderProject(
     { cache: "no-store" },
   );
   return adaptReaderPayload(payload, bookId, projectId);
+}
+
+export function listLibrary(signal?: AbortSignal): Promise<LibraryEdition[]> {
+  return requestJson<LibraryEdition[]>("/library", { cache: "no-store", signal });
+}
+
+export function getMangaEdition(
+  editionId: string,
+  signal?: AbortSignal,
+): Promise<MangaEditionView> {
+  return requestJson<MangaEditionView>(`/manga/${encodeURIComponent(editionId)}`, {
+    cache: "no-store",
+    signal,
+  });
 }

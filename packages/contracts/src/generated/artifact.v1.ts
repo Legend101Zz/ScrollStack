@@ -24,12 +24,14 @@ export type ArtifactKind =
   | "validation_report"
   | "revision_request"
   | "image_attempt"
+  | "image_asset"
   | "asset_request_set"
   | "manga_script"
   | "storyboard"
   | "page_composition"
   | "rendered_page"
   | "rendered_page_set"
+  | "manga_edition"
   | "manga_manifest"
   | "reel_spec"
   | "render_receipt"
@@ -74,6 +76,7 @@ export type SourceRefs = SourceRef[];
 export type StageRunId = string | null;
 export type StorageRef = string | null;
 export type SupersedesArtifactId = string | null;
+export type ImplementationVersion = string | null;
 export type Code = string;
 export type Message = string;
 export type Path = string | null;
@@ -82,6 +85,7 @@ export type Path = string | null;
  */
 export type Issues = ValidationIssue[];
 export type Passed = boolean;
+export type TextModelExecuted = boolean | null;
 export type ValidatorVersion = string;
 export type ValidationStatus = "pending" | "valid" | "invalid" | "accepted" | "rejected" | "superseded";
 
@@ -129,8 +133,10 @@ export interface SourceRef {
   text_hash: TextHash;
 }
 export interface ValidationReport {
+  implementation_version?: ImplementationVersion;
   issues?: Issues;
   passed: Passed;
+  text_model_executed?: TextModelExecuted;
   validator_version: ValidatorVersion;
 }
 export interface ValidationIssue {

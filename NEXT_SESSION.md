@@ -1826,3 +1826,76 @@ images without a new explicit user instruction.
 - Phase 2 still needs bounded reusable asset generation, scene composition,
   lettering, deterministic final rendering, reader v2 integration, and
   acceptance. Phases 3 and 4 remain as described in Section 16.
+
+## 19. User feedback - 2026-07-21
+
+### Verbatim feedback
+
+> so see this is a hackathon I am taking part in , I want to iterate faster so first what I want is to have the pdf book manga generated so I can see and test , then I want to test , that I add a pdf and for it the manga is generated ,
+> also all generated mangas we should store in a library so again I can watch and ask for more as needed ... so first tell me how to do these things as we can not waste time we want to do it faster and with quality
+
+### Feedback mapping
+
+This is primarily **workflow and product-priority feedback**. The requested
+order is the working constraint for the hackathon slice:
+
+1. Complete and expose one readable manga for the supplied PDF so the product
+   can be judged immediately.
+2. Persist accepted manga editions in a library and make them reopenable.
+3. Expose the same generation loop for a newly uploaded PDF with visible stage
+   progress.
+4. Add targeted iteration only after the golden edition, library, and upload
+   path work, preserving fast feedback without sacrificing artifact quality.
+
+This feedback does not redefine SVG thumbnails or experimental panel images as
+a finished manga. The product loop is complete only when composed, ordered,
+lettered reader pages exist as an immutable accepted edition.
+
+## 20. Demo priority override - 2026-07-22
+
+### Verbatim feedback
+
+> “so as minimax is taking too much time, so can you for the demo just generate
+> for the first 10-15 pages the manga with images”
+
+### Implemented result
+
+The demo intentionally prioritizes PDF pages 1-15 and performs no new text-model
+execution. It reuses `book_d584c9fd6bd3506fa2167d69` and
+`project_163d0056c7e9d9bda3abe824`, creates bounded scope
+`scope_d56263bb9d311b4b1834cef7`, and runs the idempotent pipeline as
+`run_7f884b611dfcbc2cd0922137`.
+
+The source-locked system path persisted accepted deterministic equivalents:
+
+- ContextPack: `context_a264c5df25bcc0f22fb846c4`
+- MangaPlan: `manga_plan_eca9e6e8a04c46fd52ee70ea`
+- PageScriptSet: `page_script_set_fc9222110cd1a70c4b474ef6`
+- ThumbnailSet: `thumbnail_set_5dfb362b5743c2906ae27e30`
+- MangaEdition: `edition_3f9de5435d5422ee7924b4eb`
+
+The immutable edition contains exactly five ordered 1200x1800 composed PNGs,
+exactly ten accepted panel images, the accepted Kai reference, every accepted
+and rejected attempt/receipt, complete hashes and lineage, `$0` text cost,
+`$0.4319757` accepted-attempt image cost, and `$0.549321` total image cost
+including three rejected attempts. One rejected panel was retried once; no
+accepted panel was regenerated.
+
+The edition is visible at `/library` and opens at
+`/manga/edition_3f9de5435d5422ee7924b4eb`. The upload route remains
+`/books/new`. Rendered pages, screenshots, the contact sheet, costs, IDs, and
+known limitations are recorded under
+`docs/evidence/deterministic-demo-run_7f884b611dfcbc2cd0922137/`.
+
+### Warnings that must remain explicit
+
+- Mongo data restored from the supplied Mongo 7 archive is being served by
+  Mongo 8.2.3. The successful demo does not erase the cross-major restore
+  compatibility warning.
+- PDF pages 1-15 are front-matter and contents heavy and the parser stores one
+  source unit per page. The deterministic token threshold therefore includes
+  grounded copyright material from page 5; it is source-correct but weak manga
+  content.
+- OCR found no letters in accepted image layers, but several accepted images
+  contain empty balloon shapes. Visible words are deterministic renderer
+  output; future targeted work should suppress the empty generated shapes.

@@ -37,12 +37,14 @@ class ArtifactKind(str, Enum):
     VALIDATION_REPORT = "validation_report"
     REVISION_REQUEST = "revision_request"
     IMAGE_ATTEMPT = "image_attempt"
+    IMAGE_ASSET = "image_asset"
     ASSET_REQUEST_SET = "asset_request_set"
     MANGA_SCRIPT = "manga_script"
     STORYBOARD = "storyboard"
     PAGE_COMPOSITION = "page_composition"
     RENDERED_PAGE = "rendered_page"
     RENDERED_PAGE_SET = "rendered_page_set"
+    MANGA_EDITION = "manga_edition"
     MANGA_MANIFEST = "manga_manifest"
     REEL_SPEC = "reel_spec"
     RENDER_RECEIPT = "render_receipt"
@@ -81,6 +83,8 @@ class ValidationReport(ContractModel):
     passed: bool
     issues: list[ValidationIssue] = Field(default_factory=list, max_length=1_000)
     validator_version: ShortText
+    implementation_version: ShortText | None = None
+    text_model_executed: bool | None = None
 
 
 class Artifact(ContractModel):

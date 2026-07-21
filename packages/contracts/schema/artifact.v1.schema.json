@@ -13,12 +13,14 @@
         "validation_report",
         "revision_request",
         "image_attempt",
+        "image_asset",
         "asset_request_set",
         "manga_script",
         "storyboard",
         "page_composition",
         "rendered_page",
         "rendered_page_set",
+        "manga_edition",
         "manga_manifest",
         "reel_spec",
         "render_receipt",
@@ -266,6 +268,20 @@
     "ValidationReport": {
       "additionalProperties": false,
       "properties": {
+        "implementation_version": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Implementation Version"
+        },
         "issues": {
           "items": {
             "$ref": "#/$defs/ValidationIssue"
@@ -277,6 +293,18 @@
         "passed": {
           "title": "Passed",
           "type": "boolean"
+        },
+        "text_model_executed": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Text Model Executed"
         },
         "validator_version": {
           "maxLength": 500,

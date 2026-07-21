@@ -62,6 +62,7 @@ class MangaPagePlanningService:
         script_set: PageScriptSet,
         context_pack_id: str | None = None,
         author: str = "agent",
+        implementation_version: str | None = None,
     ) -> ArtifactDoc:
         run = await self._runs.get_run(run_id)
         if run is None:
@@ -114,6 +115,11 @@ class MangaPagePlanningService:
                 "passed": True,
                 "issues": [],
                 "validator_version": "page-script-validator.v1",
+                **(
+                    {"implementation_version": implementation_version}
+                    if implementation_version is not None
+                    else {}
+                ),
             },
             created_at=utc_now(),
         )

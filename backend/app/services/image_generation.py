@@ -144,6 +144,115 @@ class OpenRouterImageGenerator:
             latency_ms=latency_ms,
         )
 
+    async def generate_with_references(
+        self,
+        *,
+        prompt: str,
+        model: str,
+        aspect_ratio: str,
+        reference_images: list[tuple[bytes, str]],
+    ) -> GeneratedImage:
+        """Generate through OpenRouter's image API with private inline references."""
+
+        if model != APPROVED_OPENROUTER_IMAGE_MODEL:
+            raise ImageGenerationError(
+                f"Image model {model!r} is not the approved pinned OpenRouter model"
+            )
+        if len(reference_images) > 3:
+            raise ImageGenerationError("The pinned image model accepts at most three references")
+        input_references: list[dict[str, object]] = []
+        for content, mime_type in reference_images:
+            if mime_type not in {"image/png", "image/jpeg", "image/webp"}:
+                raise ImageGenerationError(f"Unsupported reference MIME type {mime_type!r}")
+            if not content or len(content) > MAX_IMAGE_RESPONSE_BYTES:
+                raise ImageGenerationError("Reference image bytes are outside the bounded limit")
+            encoded = base64.b64encode(content).decode("ascii")
+            input_references.append(
+                {
+                    "type": "image_url",
+                    "image_url": {"url": f"data:{mime_type};base64,{encoded}"},
+                }
+            )
+        payload: dict[str, object] = {
+            "model": model,
+            "prompt": prompt[:4_000],
+            "n": 1,
+            "aspect_ratio": aspect_ratio,
+            "output_format": "png",
+        }
+        if input_references:
+            payload["input_references"] = input_references
+        started = time.monotonic()
+        try:
+            async with httpx.AsyncClient(
+                timeout=self._timeout_seconds,
+                transport=self._transport,
+            ) as client:
+                response = await client.post(
+                    "https://openrouter.ai/api/v1/images",
+                    headers={
+                        "Authorization": f"Bearer {self._api_key}",
+                        "HTTP-Referer": "https://scrollstack.local",
+                        "X-Title": "ScrollStack",
+                        "Content-Type": "application/json",
+                    },
+                    json=payload,
+                )
+        except httpx.HTTPError as error:
+            raise ImageGenerationError(
+                f"OpenRouter reference image request failed: {type(error).__name__}"
+            ) from error
+        latency_ms = max(0, round((time.monotonic() - started) * 1_000))
+        if response.status_code != 200:
+            raise ImageGenerationError(
+                f"OpenRouter image request returned HTTP {response.status_code}"
+            )
+        try:
+            body = response.json()
+        except ValueError as error:
+            raise InvalidImageResponseError(
+                "OpenRouter image response was not valid JSON"
+            ) from error
+        content, mime_type = self._decode_image_api_response(body)
+        width, height = self._image_dimensions(content)
+        usage = body.get("usage") if isinstance(body, dict) else None
+        usage = usage if isinstance(usage, dict) else {}
+        return GeneratedImage(
+            content=content,
+            mime_type=mime_type,
+            width=width,
+            height=height,
+            provider="openrouter",
+            model=model,
+            input_tokens=self._optional_int(usage.get("prompt_tokens")),
+            output_tokens=self._optional_int(usage.get("completion_tokens")),
+            cost_usd=self._optional_float(usage.get("cost")),
+            latency_ms=latency_ms,
+        )
+
+    @staticmethod
+    def _decode_image_api_response(body: Any) -> tuple[bytes, str]:
+        if not isinstance(body, dict):
+            raise InvalidImageResponseError("OpenRouter image response must be an object")
+        data = body.get("data")
+        if not isinstance(data, list) or len(data) != 1 or not isinstance(data[0], dict):
+            raise InvalidImageResponseError("OpenRouter image response omitted its single image")
+        encoded = data[0].get("b64_json")
+        mime_type = data[0].get("media_type") or "image/png"
+        if not isinstance(encoded, str) or not isinstance(mime_type, str):
+            raise InvalidImageResponseError("OpenRouter image response has invalid image fields")
+        if mime_type not in {"image/png", "image/jpeg", "image/webp"}:
+            raise InvalidImageResponseError(f"Unsupported image MIME type {mime_type!r}")
+        try:
+            content = base64.b64decode(encoded, validate=True)
+        except (binascii.Error, ValueError) as error:
+            raise InvalidImageResponseError("Image payload is not valid base64") from error
+        if not content or len(content) > MAX_IMAGE_RESPONSE_BYTES:
+            raise InvalidImageResponseError(
+                f"Image payload must be between 1 and {MAX_IMAGE_RESPONSE_BYTES} bytes"
+            )
+        return content, mime_type
+
     @staticmethod
     def _find_image_url(body: Any) -> str:
         if not isinstance(body, dict):

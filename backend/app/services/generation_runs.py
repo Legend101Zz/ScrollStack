@@ -28,7 +28,12 @@ from .errors import InvalidRunStateError, NotFoundError
 from .hashing import content_hash
 
 RequestedOutput = Literal["manga", "reels", "reel_render"]
-PipelineVersion = Literal["manga-pipeline.v1", "manga-page-dsl.v2"]
+PipelineVersion = Literal[
+    "manga-pipeline.v1",
+    "manga-page-dsl.v2",
+    "manga-edition.v1",
+    "manga-demo-deterministic.v1",
+]
 
 
 def default_requested_outputs() -> list[RequestedOutput]:

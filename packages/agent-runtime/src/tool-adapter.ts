@@ -132,6 +132,10 @@ const SUBMISSION_TO_ARGUMENT: Partial<Record<DomainToolName, string>> = {
   submit_reel_specs: "specs",
 };
 
+export function submissionArgumentName(name: DomainToolName): string | undefined {
+  return SUBMISSION_TO_ARGUMENT[name];
+}
+
 export interface ToolAdapterOptions {
   names: readonly DomainToolName[];
   broker: DomainToolBroker;
