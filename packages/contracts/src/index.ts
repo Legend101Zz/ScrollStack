@@ -6,9 +6,13 @@ export {
   isArtifactRef,
   isContextPack,
   isMangaManifest,
+  isMangaPagePlan,
   isMangaPlan,
+  isPageScriptSet,
   isReelSpec,
   isRenderedPage,
+  isRenderedPageV2,
+  isThumbnailSet,
   validateContract,
   type ValidationResult,
 } from "./validators.js";

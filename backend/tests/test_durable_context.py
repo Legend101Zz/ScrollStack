@@ -20,7 +20,7 @@ from app.persistence.documents import (
     construct_document,
 )
 from app.persistence.repositories import InMemoryRepositories
-from app.services.context_compiler import ContextCompiler
+from app.services.context_compiler import ContextCompiler, Purpose
 from app.services.errors import (
     ContextBudgetError,
     StaleMemoryDeltaError,
@@ -253,6 +253,23 @@ def test_next_slice_context_includes_previous_ending_and_is_reproducible() -> No
     )
     assert first.content_hash == fresh_session.content_hash
     assert first.context_pack_id == fresh_session.context_pack_id
+
+
+@pytest.mark.parametrize("purpose", ["manga_page_writing", "manga_thumbnail"])
+def test_context_compiler_accepts_page_planning_purposes(purpose: Purpose) -> None:
+    unit = source_unit("pages_1_10", 1, 10, "A source-grounded locality trade-off.")
+
+    context = ContextCompiler().compile(
+        project_id="project_1",
+        scope=scope([unit.source_unit_id]),
+        memory=memory_snapshot(unit),
+        source_units=[unit],
+        purpose=purpose,
+        constraints=constraints(),
+        max_input_tokens=20_000,
+    )
+
+    assert context.purpose == purpose
 
 
 def test_context_compiler_fails_when_mandatory_evidence_cannot_fit() -> None:

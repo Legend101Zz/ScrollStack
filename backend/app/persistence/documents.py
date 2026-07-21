@@ -184,12 +184,15 @@ class ArtifactDoc(Document):
     artifact_id: str
     project_id: str
     run_id: str
+    stage_run_id: str | None = None
     kind: str
     schema_version: str
     content: dict[str, Any] | None = None
     storage_ref: str | None = None
     content_hash: str
     parent_artifact_ids: list[str] = Field(default_factory=list)
+    author: str = "system"
+    supersedes_artifact_id: str | None = None
     source_refs: list[dict[str, Any]] = Field(default_factory=list)
     model_receipt: dict[str, Any] | None = None
     validation_status: str

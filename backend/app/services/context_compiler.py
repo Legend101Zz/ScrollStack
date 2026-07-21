@@ -21,7 +21,13 @@ from app.persistence.documents import ProjectMemorySnapshotDoc, ScopeManifestDoc
 from .errors import ContextBudgetError
 from .hashing import content_hash, estimate_tokens
 
-Purpose = Literal["manga_direction", "manga_composition", "reel_direction"]
+Purpose = Literal[
+    "manga_direction",
+    "manga_page_writing",
+    "manga_thumbnail",
+    "manga_composition",
+    "reel_direction",
+]
 OMITTED_TEXT = "Omitted from this bounded context pack; retrieve from durable memory if needed."
 
 

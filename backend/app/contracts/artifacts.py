@@ -29,10 +29,19 @@ class ArtifactKind(str, Enum):
     CONTEXT_PACK = "context_pack"
     ADAPTATION_BEAT_SET = "adaptation_beat_set"
     MANGA_PLAN = "manga_plan"
+    PAGE_SCRIPT_SET = "page_script_set"
+    THUMBNAIL_SET = "thumbnail_set"
+    PAGE_LAYOUT = "page_layout"
+    COMPILED_LAYOUT = "compiled_layout"
+    THUMBNAIL_PREVIEW = "thumbnail_preview"
+    VALIDATION_REPORT = "validation_report"
+    REVISION_REQUEST = "revision_request"
+    IMAGE_ATTEMPT = "image_attempt"
     ASSET_REQUEST_SET = "asset_request_set"
     MANGA_SCRIPT = "manga_script"
     STORYBOARD = "storyboard"
     PAGE_COMPOSITION = "page_composition"
+    RENDERED_PAGE = "rendered_page"
     RENDERED_PAGE_SET = "rendered_page_set"
     MANGA_MANIFEST = "manga_manifest"
     REEL_SPEC = "reel_spec"
@@ -78,12 +87,15 @@ class Artifact(ContractModel):
     artifact_id: Identifier
     project_id: Identifier
     run_id: Identifier
+    stage_run_id: Identifier | None = None
     kind: ArtifactKind
     schema_version: ShortText
     content: dict[str, JsonValue] | None = None
     storage_ref: StorageRef | None = None
     content_hash: ContentHash
     parent_artifact_ids: list[Identifier] = Field(default_factory=list, max_length=1_000)
+    author: Literal["agent", "human", "system"] = "system"
+    supersedes_artifact_id: Identifier | None = None
     source_refs: list[SourceRef] = Field(default_factory=list, max_length=10_000)
     model_receipt: ModelReceipt | None = None
     validation_status: Literal[

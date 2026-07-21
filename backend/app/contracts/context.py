@@ -15,6 +15,8 @@ from .source import SourceRef, SourceUnitExcerpt
 class AgentGoalType(str, Enum):
     BOOK_CANON = "BOOK_CANON"
     MANGA_DIRECTION = "MANGA_DIRECTION"
+    MANGA_PAGE_WRITING = "MANGA_PAGE_WRITING"
+    MANGA_THUMBNAIL = "MANGA_THUMBNAIL"
     MANGA_COMPOSITION = "MANGA_COMPOSITION"
     REEL_DIRECTION = "REEL_DIRECTION"
     ARTIFACT_REPAIR = "ARTIFACT_REPAIR"
@@ -123,7 +125,13 @@ class ContextPack(ContractModel):
     project_id: Identifier
     scope_id: Identifier
     memory_version: Annotated[int, Field(ge=0)]
-    purpose: Literal["manga_direction", "manga_composition", "reel_direction"]
+    purpose: Literal[
+        "manga_direction",
+        "manga_page_writing",
+        "manga_thumbnail",
+        "manga_composition",
+        "reel_direction",
+    ]
     source_units: list[SourceUnitExcerpt] = Field(min_length=1, max_length=1_000)
     book_canon: BookCanonView
     continuity: ContinuityView

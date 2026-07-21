@@ -5,10 +5,19 @@
         "context_pack",
         "adaptation_beat_set",
         "manga_plan",
+        "page_script_set",
+        "thumbnail_set",
+        "page_layout",
+        "compiled_layout",
+        "thumbnail_preview",
+        "validation_report",
+        "revision_request",
+        "image_attempt",
         "asset_request_set",
         "manga_script",
         "storyboard",
         "page_composition",
+        "rendered_page",
         "rendered_page_set",
         "manga_manifest",
         "reel_spec",
@@ -295,6 +304,16 @@
       "title": "Artifact Id",
       "type": "string"
     },
+    "author": {
+      "default": "system",
+      "enum": [
+        "agent",
+        "human",
+        "system"
+      ],
+      "title": "Author",
+      "type": "string"
+    },
     "content": {
       "anyOf": [
         {
@@ -373,6 +392,21 @@
       "title": "Source Refs",
       "type": "array"
     },
+    "stage_run_id": {
+      "anyOf": [
+        {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Stage Run Id"
+    },
     "storage_ref": {
       "anyOf": [
         {
@@ -387,6 +421,21 @@
       ],
       "default": null,
       "title": "Storage Ref"
+    },
+    "supersedes_artifact_id": {
+      "anyOf": [
+        {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Supersedes Artifact Id"
     },
     "validation_report": {
       "$ref": "#/$defs/ValidationReport"

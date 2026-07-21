@@ -5,10 +5,19 @@
         "context_pack",
         "adaptation_beat_set",
         "manga_plan",
+        "page_script_set",
+        "thumbnail_set",
+        "page_layout",
+        "compiled_layout",
+        "thumbnail_preview",
+        "validation_report",
+        "revision_request",
+        "image_attempt",
         "asset_request_set",
         "manga_script",
         "storyboard",
         "page_composition",
+        "rendered_page",
         "rendered_page_set",
         "manga_manifest",
         "reel_spec",
@@ -814,6 +823,8 @@
     "purpose": {
       "enum": [
         "manga_direction",
+        "manga_page_writing",
+        "manga_thumbnail",
         "manga_composition",
         "reel_direction"
       ],
