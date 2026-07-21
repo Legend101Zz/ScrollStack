@@ -16,7 +16,8 @@
     "render": "tsx src/cli.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "generate-panels": "tsx scripts/generate-panels.ts"
+    "generate-panels": "tsx scripts/generate-panels.ts",
+    "spike:manifest": "tsx scripts/manifest-bridge-spike.ts"
   },
   "dependencies": {
     "@remotion/bundler": "4.0.493",
