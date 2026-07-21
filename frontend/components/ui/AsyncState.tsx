@@ -24,6 +24,32 @@ export function ReaderSkeleton() {
   );
 }
 
+export function ReaderLoadError({
+  bookId,
+  code,
+  message,
+  projectId,
+}: {
+  bookId: string;
+  code: string;
+  message: string;
+  projectId: string;
+}) {
+  return (
+    <main className="grid min-h-[100dvh] place-items-center bg-shell px-4 py-16">
+      <section className="w-full max-w-xl rounded-panel border border-accent/35 bg-ink-raised p-8 text-center sm:p-12">
+        <Warning aria-hidden className="mx-auto text-accent-soft" size={36} weight="duotone" />
+        <h1 className="mt-5 font-display text-3xl text-copy">This manga is not ready to read</h1>
+        <p className="mt-3 text-sm leading-6 text-copy-secondary">{message}</p>
+        <p className="mt-4 font-mono text-xs text-copy-muted">{code}</p>
+        <Button asChild className="mt-7" variant="secondary">
+          <Link href={`/books/${bookId}/scope?projectId=${projectId}`}>Choose pages again</Link>
+        </Button>
+      </section>
+    </main>
+  );
+}
+
 export function LibraryEmptyState() {
   return (
     <section className="rounded-panel border border-white/15 bg-ink-raised p-8 text-center sm:p-12">

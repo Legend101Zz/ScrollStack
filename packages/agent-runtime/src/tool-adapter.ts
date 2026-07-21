@@ -100,6 +100,7 @@ export interface ToolAdapterOptions {
   broker: DomainToolBroker;
   scope: DomainToolRequest["scope"];
   maxToolCalls: number;
+  maxRepairAttempts: number;
   onCandidate(candidate: JsonValue): void;
   onToolCall(name: DomainToolName, state: "started" | "succeeded" | "failed"): void;
 }
@@ -110,6 +111,7 @@ function asJsonRecord(value: unknown): Record<string, JsonValue> {
 
 export function createBrokeredTools(options: ToolAdapterOptions): ToolDefinition[] {
   let callCount = 0;
+  const submissionCalls = new Map<DomainToolName, number>();
 
   return options.names.map((name) =>
     defineTool({
@@ -122,6 +124,15 @@ export function createBrokeredTools(options: ToolAdapterOptions): ToolDefinition
         callCount += 1;
         if (callCount > options.maxToolCalls) {
           throw new Error(`Tool-call budget exceeded (${options.maxToolCalls})`);
+        }
+        if (SUBMISSION_TO_ARGUMENT[name]) {
+          const nextSubmissionCall = (submissionCalls.get(name) ?? 0) + 1;
+          if (nextSubmissionCall > options.maxRepairAttempts + 1) {
+            throw new Error(
+              `${name} repair budget exceeded (${options.maxRepairAttempts} repairs)`,
+            );
+          }
+          submissionCalls.set(name, nextSubmissionCall);
         }
 
         options.onToolCall(name, "started");

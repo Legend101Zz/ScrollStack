@@ -23,6 +23,22 @@ class CreateMangaProjectRequest(BaseModel):
     owner_id: str = Field(min_length=1, max_length=128)
 
 
+class SourceUnitMetadata(BaseModel):
+    """Page-selection metadata; extracted source text stays off the list response."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    source_unit_id: str
+    kind: str
+    heading_path: list[str]
+    page_start: int
+    page_end: int
+    text_hash: str
+    token_count: int
+    image_refs: list[str]
+    parse_version: str
+
+
 def books_router(services: ControlPlaneServices) -> APIRouter:
     router = APIRouter()
 
@@ -55,11 +71,25 @@ def books_router(services: ControlPlaneServices) -> APIRouter:
 
     @router.get(
         "/books/{book_id}/source-units",
-        response_model=list[SourceUnit],
+        response_model=list[SourceUnitMetadata],
         tags=["books"],
     )
-    async def list_source_units(book_id: str) -> list[SourceUnit]:
-        return await services.pdf_ingestion.list_source_units(book_id)
+    async def list_source_units(book_id: str) -> list[SourceUnitMetadata]:
+        units = await services.pdf_ingestion.list_source_units(book_id)
+        return [
+            SourceUnitMetadata(
+                source_unit_id=item.source_unit_id,
+                kind=item.kind,
+                heading_path=item.heading_path,
+                page_start=item.page_start,
+                page_end=item.page_end,
+                text_hash=item.text_hash,
+                token_count=item.token_count,
+                image_refs=item.image_refs,
+                parse_version=item.parse_version,
+            )
+            for item in units
+        ]
 
     @router.get(
         "/books/{book_id}/pages/{page_number}",
@@ -78,9 +108,7 @@ def books_router(services: ControlPlaneServices) -> APIRouter:
     async def create_manga_project(
         book_id: str, request: CreateMangaProjectRequest
     ) -> MangaProjectView:
-        project, _created = await services.projects.create(
-            book_id, owner_id=request.owner_id
-        )
+        project, _created = await services.projects.create(book_id, owner_id=request.owner_id)
         return project
 
     @router.get(

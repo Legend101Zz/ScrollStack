@@ -1,4 +1,4 @@
-import { PiAgentRuntime } from "@scrollstack/agent-runtime";
+import { PiAgentRuntime, resolvePinnedModel } from "@scrollstack/agent-runtime";
 
 import { loadWorkerConfig } from "./config.js";
 import { buildServer } from "./server.js";
@@ -6,6 +6,10 @@ import { loadProductionSkills } from "./skills/load.js";
 import { HttpDomainToolBroker } from "./tools/domain-tool-broker.js";
 
 const config = loadWorkerConfig();
+const modelSelection =
+  config.modelProvider && config.modelId
+    ? await resolvePinnedModel(config.modelProvider, config.modelId)
+    : undefined;
 const skills = await loadProductionSkills();
 const broker = new HttpDomainToolBroker({
   baseUrl: config.domainToolBrokerUrl,
@@ -17,6 +21,7 @@ const runtime = new PiAgentRuntime({
   skills,
   provider: config.modelProvider,
   model: config.modelId,
+  modelSelection,
   credentialReady: () => Boolean(process.env[config.modelApiKeyEnv]),
 });
 const app = buildServer({

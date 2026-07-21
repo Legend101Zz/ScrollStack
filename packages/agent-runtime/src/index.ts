@@ -1,5 +1,11 @@
 export { AgentPolicyError, assertGoalPolicy, GOAL_POLICIES } from "./policies.js";
-export { PiAgentRuntime, productionSessionPolicy, type PiAgentRuntimeConfig } from "./pi-runtime.js";
+export {
+  PiAgentRuntime,
+  productionSessionPolicy,
+  resolvePinnedModel,
+  type PiAgentRuntimeConfig,
+  type PiModelSelection,
+} from "./pi-runtime.js";
 export type {
   AgentRunOptions,
   AgentRunResult,

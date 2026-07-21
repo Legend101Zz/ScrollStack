@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, ValidationError
@@ -29,6 +31,22 @@ from .agent_worker import AgentWorkerError, AgentWorkerGateway
 from .context_compiler import ContextCompiler
 from .errors import ArtifactValidationError, NotFoundError
 from .hashing import content_hash
+from .image_generation import APPROVED_OPENROUTER_IMAGE_MODEL, ImageGenerationGateway
+from .manga_production import MangaProductionService
+from .memory import MemoryMergeService
+
+REQUIRED_MANGA_DIRECTOR_PROVIDER = "minimax"
+REQUIRED_MANGA_DIRECTOR_MODEL = "MiniMax-M3"
+
+
+class StageRetryExhaustedError(Exception):
+    code = "stage_retry_exhausted"
+    retryable = False
+
+
+class RenderBudgetTimeoutError(Exception):
+    code = "render_time_budget_exceeded"
+    retryable = True
 
 
 class WorkflowExecutionResult(BaseModel):
@@ -48,11 +66,23 @@ class GenerationWorkflowService:
         agent_worker: AgentWorkerGateway | None,
         agentic_enabled: bool,
         compiler: ContextCompiler | None = None,
+        image_provider: ImageGenerationGateway | None = None,
+        media_root: Path = Path("storage"),
+        image_model: str = APPROVED_OPENROUTER_IMAGE_MODEL,
+        max_reserved_cost_per_asset_usd: float = 1.0,
     ) -> None:
         self._repositories = repositories
         self._agent_worker = agent_worker
         self._agentic_enabled = agentic_enabled
         self._compiler = compiler or ContextCompiler()
+        self._image_model = image_model
+        self._production = MangaProductionService(
+            repositories,
+            image_provider=image_provider,
+            media_root=media_root,
+            image_model=image_model,
+            max_reserved_cost_per_asset_usd=max_reserved_cost_per_asset_usd,
+        )
 
     async def execute(self, run_id: str) -> WorkflowExecutionResult:
         run = await self._repositories.get_run(run_id)
@@ -61,11 +91,7 @@ class GenerationWorkflowService:
         if run.status in {"cancelled", "superseded", "terminal_failed", "succeeded"}:
             stages = await self._repositories.list_stages(run_id)
             error_code = next(
-                (
-                    item.error_code
-                    for item in reversed(stages)
-                    if item.error_code is not None
-                ),
+                (item.error_code for item in reversed(stages) if item.error_code is not None),
                 None,
             )
             return WorkflowExecutionResult(
@@ -73,9 +99,7 @@ class GenerationWorkflowService:
                 status=run.status,
                 accepted_artifact_ids=[
                     item.artifact_id
-                    for item in await self._repositories.list_artifacts(
-                        run_id, accepted_only=True
-                    )
+                    for item in await self._repositories.list_artifacts(run_id, accepted_only=True)
                 ],
                 error_code=error_code,
             )
@@ -105,9 +129,7 @@ class GenerationWorkflowService:
             )
 
         try:
-            manga_plan_artifact = await self._run_manga_direction(
-                run, context_artifact, context
-            )
+            manga_plan_artifact = await self._run_manga_direction(run, context_artifact, context)
         except Exception as error:
             return await self._fail_without_stage(
                 run,
@@ -116,20 +138,59 @@ class GenerationWorkflowService:
                 input_artifact_ids=[context_artifact.artifact_id],
             )
 
-        return await self._record_pipeline_gap(run, manga_plan_artifact)
+        try:
+            asset_set_artifact = await self._generate_assets(run, manga_plan_artifact)
+        except Exception as error:
+            return await self._fail_without_stage(
+                run,
+                stage_name="asset_generation",
+                error=error,
+                input_artifact_ids=[manga_plan_artifact.artifact_id],
+            )
+        try:
+            rendered_page_set_artifact = await self._compose_rendered_pages(
+                run,
+                manga_plan_artifact,
+                asset_set_artifact,
+            )
+        except Exception as error:
+            return await self._fail_without_stage(
+                run,
+                stage_name="manga_composition",
+                error=error,
+                input_artifact_ids=[
+                    manga_plan_artifact.artifact_id,
+                    asset_set_artifact.artifact_id,
+                ],
+            )
+        try:
+            await self._merge_memory(
+                run,
+                manga_plan_artifact,
+                asset_set_artifact,
+                rendered_page_set_artifact,
+            )
+        except Exception as error:
+            return await self._fail_without_stage(
+                run,
+                stage_name="memory_delta_merge",
+                error=error,
+                input_artifact_ids=[
+                    manga_plan_artifact.artifact_id,
+                    asset_set_artifact.artifact_id,
+                    rendered_page_set_artifact.artifact_id,
+                ],
+            )
+        return await self._succeed_run(run)
 
-    async def _compile_context(
-        self, run: GenerationRunDoc
-    ) -> tuple[ArtifactDoc, ContextPack]:
+    async def _compile_context(self, run: GenerationRunDoc) -> tuple[ArtifactDoc, ContextPack]:
         scope = await self._repositories.get_scope(run.scope_id)
         if scope is None or scope.project_id != run.project_id:
             raise NotFoundError(f"Scope {run.scope_id} is unavailable for run {run.run_id}")
         project = await self._repositories.get_project(run.project_id)
         if project is None:
             raise NotFoundError(f"Manga project {run.project_id} does not exist")
-        memory = await self._repositories.get_memory_snapshot(
-            run.project_id, run.memory_version
-        )
+        memory = await self._repositories.get_memory_snapshot(run.project_id, run.memory_version)
         if memory is None:
             raise NotFoundError(
                 f"Memory snapshot {run.project_id}@{run.memory_version} does not exist"
@@ -145,9 +206,7 @@ class GenerationWorkflowService:
             narration_enabled=False,
         )
         required_fact_ids = {
-            str(item["fact_id"])
-            for item in memory.facts
-            if isinstance(item.get("fact_id"), str)
+            str(item["fact_id"]) for item in memory.facts if isinstance(item.get("fact_id"), str)
         }
         compile_input_hash = content_hash(
             {
@@ -229,8 +288,17 @@ class GenerationWorkflowService:
         )
         if stage.status == "succeeded" and stage.output_artifact_ids:
             existing = await self._repositories.get_artifact(stage.output_artifact_ids[0])
-            if existing is not None:
+            existing_receipt = existing.model_receipt if existing is not None else None
+            if (
+                existing is not None
+                and existing_receipt is not None
+                and existing_receipt.get("provider") == REQUIRED_MANGA_DIRECTOR_PROVIDER
+                and existing_receipt.get("model") == REQUIRED_MANGA_DIRECTOR_MODEL
+            ):
                 return existing
+            raise ArtifactValidationError(
+                "Succeeded Manga Director stage lacks the required MiniMax M3 receipt"
+            )
 
         goal = AgentGoal(
             goal_id=f"goal_{stage.idempotency_key[:20]}_{stage.attempt}",
@@ -324,6 +392,13 @@ class GenerationWorkflowService:
             or not isinstance(tokens, dict)
         ):
             raise ArtifactValidationError("Agent trace omitted model provenance")
+        if provider != REQUIRED_MANGA_DIRECTOR_PROVIDER or model != REQUIRED_MANGA_DIRECTOR_MODEL:
+            raise ArtifactValidationError(
+                "Manga Director must use provider=minimax and model=MiniMax-M3"
+            )
+        latency_ms = self._optional_int(trace.get("latency_ms"))
+        if latency_ms is None:
+            raise ArtifactValidationError("Agent trace omitted measured latency_ms")
         receipt = ModelReceipt(
             provider=provider,
             model=model,
@@ -334,8 +409,8 @@ class GenerationWorkflowService:
             input_tokens=self._optional_int(tokens.get("input")),
             output_tokens=self._optional_int(tokens.get("output")),
             cost_usd=self._optional_float(trace.get("cost_usd")),
-            latency_ms=self._optional_int(trace.get("latency_ms")) or 0,
-            attempt=1,
+            latency_ms=latency_ms,
+            attempt=stage.attempt,
             created_at=utc_now(),
         )
         accepted = construct_document(
@@ -364,40 +439,155 @@ class GenerationWorkflowService:
         await self._succeed_stage(run, stage, [stored.artifact_id])
         return stored
 
-    async def _record_pipeline_gap(
-        self, run: GenerationRunDoc, manga_plan: ArtifactDoc
-    ) -> WorkflowExecutionResult:
+    async def _generate_assets(
+        self,
+        run: GenerationRunDoc,
+        manga_plan: ArtifactDoc,
+    ) -> ArtifactDoc:
         stage = await self._start_stage(
             run,
-            "existing_manga_pipeline",
+            "asset_generation",
             input_artifact_ids=[manga_plan.artifact_id],
-            input_hash=manga_plan.content_hash,
-            schema_version="rendered-page.v1",
-            prompt_version="deterministic-manga-pipeline.v1",
+            input_hash=content_hash(
+                {
+                    "manga_plan_hash": manga_plan.content_hash,
+                    "max_image_cost_usd": run.budget["max_image_cost_usd"],
+                    "max_key_panels": run.budget["max_key_panels"],
+                    "image_model": self._image_model,
+                }
+            ),
+            schema_version="asset-set.v1",
+            prompt_version="manga-key-panel.v1",
         )
-        now = utc_now()
-        stage.status = "terminal_failed"
-        stage.error_code = "MANGA_PIPELINE_NOT_CONNECTED"
-        stage.error_detail = {
-            "message": (
-                "MangaPlan is accepted, but composition and RenderedPage assembly are not "
-                "connected; the run is intentionally not marked succeeded."
+        if stage.status == "succeeded" and stage.output_artifact_ids:
+            existing = await self._repositories.get_artifact(stage.output_artifact_ids[0])
+            if existing is not None:
+                return existing
+        timeout_seconds = float(run.budget["max_render_minutes"]) * 60
+        if timeout_seconds <= 0:
+            raise RenderBudgetTimeoutError(
+                "Image generation cannot start because max_render_minutes is zero"
             )
-        }
-        stage.ended_at = now
-        await self._repositories.save_stage(stage)
-        run.status = "terminal_failed"
+        try:
+            async with asyncio.timeout(timeout_seconds):
+                artifact = await self._production.generate_assets(
+                    run,
+                    manga_plan,
+                    attempt=stage.attempt,
+                )
+        except TimeoutError as error:
+            raise RenderBudgetTimeoutError(
+                "Image generation exceeded max_render_minutes"
+            ) from error
+        await self._succeed_stage(run, stage, [artifact.artifact_id])
+        return artifact
+
+    async def _compose_rendered_pages(
+        self,
+        run: GenerationRunDoc,
+        manga_plan: ArtifactDoc,
+        asset_set: ArtifactDoc,
+    ) -> ArtifactDoc:
+        stage = await self._start_stage(
+            run,
+            "manga_composition",
+            input_artifact_ids=[manga_plan.artifact_id, asset_set.artifact_id],
+            input_hash=content_hash(
+                {
+                    "manga_plan_hash": manga_plan.content_hash,
+                    "asset_set_hash": asset_set.content_hash,
+                }
+            ),
+            schema_version="rendered-page-set.v1",
+            prompt_version="deterministic-manga-composer.v1",
+        )
+        if stage.status == "succeeded" and stage.output_artifact_ids:
+            existing = await self._repositories.get_artifact(stage.output_artifact_ids[0])
+            if existing is not None:
+                return existing
+        artifact = await self._production.compose_rendered_pages(
+            run,
+            manga_plan,
+            asset_set,
+        )
+        await self._succeed_stage(run, stage, [artifact.artifact_id])
+        return artifact
+
+    async def _merge_memory(
+        self,
+        run: GenerationRunDoc,
+        manga_plan: ArtifactDoc,
+        asset_set: ArtifactDoc,
+        rendered_page_set: ArtifactDoc,
+    ) -> ArtifactDoc:
+        inputs = [
+            manga_plan.artifact_id,
+            asset_set.artifact_id,
+            rendered_page_set.artifact_id,
+        ]
+        stage = await self._start_stage(
+            run,
+            "memory_delta_merge",
+            input_artifact_ids=inputs,
+            input_hash=content_hash(
+                {
+                    "manga_plan_hash": manga_plan.content_hash,
+                    "asset_set_hash": asset_set.content_hash,
+                    "rendered_page_set_hash": rendered_page_set.content_hash,
+                    "base_memory_version": run.memory_version,
+                }
+            ),
+            schema_version="memory-delta.v1",
+            prompt_version="accepted-manga-memory-delta.v1",
+        )
+        if stage.status == "succeeded" and stage.output_artifact_ids:
+            existing = await self._repositories.get_artifact(stage.output_artifact_ids[0])
+            if existing is not None:
+                return existing
+        delta = self._production.derive_memory_delta(
+            run,
+            manga_plan,
+            asset_set,
+            rendered_page_set,
+        )
+        artifact = await self._production.persist_memory_delta(run, delta)
+        project = await self._repositories.get_project(run.project_id)
+        if project is None:
+            raise NotFoundError(f"Manga project {run.project_id} does not exist")
+        if project.active_memory_version == run.memory_version:
+            await MemoryMergeService(
+                self._repositories,
+                self._repositories,
+                self._repositories,
+            ).merge(delta)
+        elif project.active_memory_version == run.memory_version + 1:
+            snapshot = await self._repositories.get_memory_snapshot(
+                run.project_id,
+                project.active_memory_version,
+            )
+            if snapshot is None or not set(inputs).issubset(snapshot.source_artifact_ids):
+                raise ArtifactValidationError(
+                    "Active memory advanced without this accepted manga lineage"
+                )
+        else:
+            raise ArtifactValidationError(
+                "Active memory version is incompatible with this generation run"
+            )
+        await self._succeed_stage(run, stage, [artifact.artifact_id])
+        return artifact
+
+    async def _succeed_run(self, run: GenerationRunDoc) -> WorkflowExecutionResult:
+        now = utc_now()
+        run.status = "succeeded"
         run.active_stage = None
         run.updated_at = now
         await self._repositories.save_run(run)
-        accepted = await self._repositories.list_artifacts(
-            run.run_id, accepted_only=True
-        )
+        accepted = await self._repositories.list_artifacts(run.run_id, accepted_only=True)
         return WorkflowExecutionResult(
             run_id=run.run_id,
             status=run.status,
             accepted_artifact_ids=[item.artifact_id for item in accepted],
-            error_code=stage.error_code,
+            error_code=None,
         )
 
     async def _start_stage(
@@ -442,6 +632,9 @@ class GenerationWorkflowService:
                     run.updated_at = now
                     await self._repositories.save_run(run)
                     return await self._repositories.save_stage(existing)
+                raise StageRetryExhaustedError(
+                    f"Stage {stage_name} exhausted {max_attempts} bounded attempts"
+                )
             return existing
         now = utc_now()
         stage = construct_document(
@@ -509,19 +702,20 @@ class GenerationWorkflowService:
                 prompt_version="none",
             )
         now = utc_now()
+        failure_status = (
+            "retryable_failed" if bool(getattr(error, "retryable", True)) else "terminal_failed"
+        )
         if stage.status != "succeeded":
-            stage.status = "retryable_failed"
+            stage.status = failure_status
             stage.error_code = error_code[:128]
             stage.error_detail = {"message": str(error)[:2_000]}
             stage.ended_at = now
             await self._repositories.save_stage(stage)
-        run.status = "retryable_failed"
+        run.status = failure_status
         run.active_stage = None
         run.updated_at = now
         await self._repositories.save_run(run)
-        accepted = await self._repositories.list_artifacts(
-            run.run_id, accepted_only=True
-        )
+        accepted = await self._repositories.list_artifacts(run.run_id, accepted_only=True)
         return WorkflowExecutionResult(
             run_id=run.run_id,
             status=run.status,

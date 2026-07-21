@@ -40,6 +40,7 @@ class FakeRuntime implements ScrollStackAgentRuntime {
         tool_calls: [],
         tokens: { input: 1, output: 1, cache_read: 0, cache_write: 0, total: 2 },
         cost_usd: 0,
+        latency_ms: 1,
         compaction_count: 0,
       },
     }),
@@ -192,6 +193,7 @@ describe("agent worker", () => {
                 tool_calls: [],
                 tokens: { input: 0, output: 0, cache_read: 0, cache_write: 0, total: 0 },
                 cost_usd: 0,
+                latency_ms: 1,
                 compaction_count: 0,
               },
             });
@@ -233,6 +235,7 @@ describe("agent worker", () => {
           tool_calls: [],
           tokens: { input: 1, output: 1, cache_read: 0, cache_write: 0, total: 2 },
           cost_usd: 0,
+          latency_ms: 1,
           compaction_count: 0,
         },
       };

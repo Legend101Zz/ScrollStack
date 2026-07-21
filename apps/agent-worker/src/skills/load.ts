@@ -8,6 +8,7 @@ const SKILL_PATHS: Readonly<Record<SupportedGoalType, readonly URL[]>> = {
   BOOK_CANON: [new URL("./book-canon/SKILL.md", import.meta.url)],
   MANGA_DIRECTION: [
     new URL("./manga-direction/SKILL.md", import.meta.url),
+    new URL("./manga-direction/references/manga-plan-v1.md", import.meta.url),
     new URL("./manga-direction/references/manga-grammar.md", import.meta.url),
     new URL("./manga-direction/references/source-grounding.md", import.meta.url),
   ],

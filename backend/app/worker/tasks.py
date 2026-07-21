@@ -12,6 +12,7 @@ from app.persistence.mongo import initialize_mongo
 from app.persistence.repositories import BeanieRepositories
 from app.services.agent_worker import HttpAgentWorkerClient
 from app.services.generation_workflow import GenerationWorkflowService
+from app.services.image_generation import OpenRouterImageGenerator
 from app.services.pdf_ingestion import PdfIngestionService
 
 from .celery_app import celery_app
@@ -26,9 +27,7 @@ def execute_generation_run(self: Any, run_id: str) -> dict[str, object]:
     async def run() -> dict[str, object]:
         mongo_uri = os.environ["MONGODB_URI"]
         parsed = urlparse(mongo_uri)
-        client = await initialize_mongo(
-            mongo_uri, parsed.path.lstrip("/") or "scrollstack"
-        )
+        client = await initialize_mongo(mongo_uri, parsed.path.lstrip("/") or "scrollstack")
         try:
             repositories = BeanieRepositories()
             agentic_enabled = os.getenv("AGENTIC_MANGA_PIPELINE_V1", "false").lower() == "true"
@@ -39,10 +38,20 @@ def execute_generation_run(self: Any, run_id: str) -> dict[str, object]:
                     base_url=os.getenv("AGENT_WORKER_URL", "http://agent_worker:8788"),
                     token=agent_worker_token,
                 )
+            openrouter_api_key = os.getenv("OPENROUTER_API_KEY", "")
+            image_provider = (
+                OpenRouterImageGenerator(openrouter_api_key) if openrouter_api_key else None
+            )
             result = await GenerationWorkflowService(
                 repositories,
                 agent_worker=agent_worker,
                 agentic_enabled=agentic_enabled,
+                image_provider=image_provider,
+                media_root=Path(os.getenv("MEDIA_ROOT", "/data/media")),
+                image_model=os.getenv(
+                    "IMAGE_MODEL",
+                    "google/gemini-2.5-flash-image",
+                ),
             ).execute(run_id)
             return result.model_dump(mode="json")
         finally:
@@ -56,9 +65,7 @@ def parse_pdf_source(book_id: str) -> dict[str, object]:
     async def run() -> dict[str, object]:
         mongo_uri = os.environ["MONGODB_URI"]
         parsed = urlparse(mongo_uri)
-        client = await initialize_mongo(
-            mongo_uri, parsed.path.lstrip("/") or "scrollstack"
-        )
+        client = await initialize_mongo(mongo_uri, parsed.path.lstrip("/") or "scrollstack")
         try:
             repositories = BeanieRepositories()
             service = PdfIngestionService(

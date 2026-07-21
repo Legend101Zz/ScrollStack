@@ -55,7 +55,22 @@ export class HttpDomainToolBroker implements DomainToolBroker {
         throw new Error(`Domain tool response exceeds ${this.maxResponseBytes} bytes`);
       }
       if (!response.ok) {
-        throw new Error(`Domain tool ${request.name} failed with HTTP ${response.status}`);
+        let detail = "";
+        try {
+          const errorPayload = JSON.parse(text) as {
+            error?: { code?: unknown; message?: unknown };
+          };
+          const code = errorPayload.error?.code;
+          const message = errorPayload.error?.message;
+          if (typeof code === "string" && typeof message === "string") {
+            detail = ` (${code}: ${message.slice(0, 1_000)})`;
+          }
+        } catch {
+          // Do not reflect arbitrary proxy bodies into the sealed model session.
+        }
+        throw new Error(
+          `Domain tool ${request.name} failed with HTTP ${response.status}${detail}`,
+        );
       }
       const parsed = JSON.parse(text) as JsonValue;
       if (!isResponse(parsed)) {

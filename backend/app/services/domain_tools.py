@@ -58,9 +58,7 @@ class MangaDirectorToolService:
         self._runs = runs
         self._artifacts = artifacts
 
-    async def execute(
-        self, tool_name: str, request: DomainToolRequest
-    ) -> DomainToolResponse:
+    async def execute(self, tool_name: str, request: DomainToolRequest) -> DomainToolResponse:
         context_artifact, context = await self._authorized_context(request.scope)
         if tool_name == "get_source_excerpt":
             return self._get_source_excerpt(context, request.arguments)
@@ -79,9 +77,7 @@ class MangaDirectorToolService:
             return self._report_source_conflict(context, request.arguments)
         raise NotFoundError(f"Domain tool {tool_name} is not enabled for Manga Director")
 
-    async def _authorized_context(
-        self, scope: DomainToolScope
-    ) -> tuple[ArtifactDoc, ContextPack]:
+    async def _authorized_context(self, scope: DomainToolScope) -> tuple[ArtifactDoc, ContextPack]:
         run = await self._runs.get_run(scope.run_id)
         if run is None:
             raise AuthorizationError("Agent tool scope references an unknown run")
@@ -168,15 +164,9 @@ class MangaDirectorToolService:
             raise ArtifactValidationError("entity_id is required")
         candidates: list[tuple[str, Any]] = []
         candidates.extend((item.fact_id, item) for item in context.book_canon.facts)
-        candidates.extend(
-            (item.character_id, item) for item in context.continuity.character_state
-        )
-        candidates.extend(
-            (item.thread_id, item) for item in context.continuity.unresolved_threads
-        )
-        candidates.extend(
-            (item.canonical_form, item) for item in context.book_canon.terminology
-        )
+        candidates.extend((item.character_id, item) for item in context.continuity.character_state)
+        candidates.extend((item.thread_id, item) for item in context.continuity.unresolved_threads)
+        candidates.extend((item.canonical_form, item) for item in context.book_canon.terminology)
         if entity_id in context.continuity.world_state:
             return DomainToolResponse(
                 content="Project-scoped canon entity returned.",
@@ -207,9 +197,11 @@ class MangaDirectorToolService:
             state.character_id: set(state.visual_asset_ids)
             for state in context.continuity.character_state
         }
-        allowed_ids = set().union(
-            *(known.get(item, set()) for item in normalized_character_ids)
-        ) if normalized_character_ids else set()
+        allowed_ids = (
+            set().union(*(known.get(item, set()) for item in normalized_character_ids))
+            if normalized_character_ids
+            else set()
+        )
         assets = [
             item.model_dump(mode="json")
             for item in context.assets
@@ -243,11 +235,18 @@ class MangaDirectorToolService:
             raise AuthorizationError("MangaPlan identity does not match its ContextPack")
         if plan.target_page_count > context.constraints.max_pages:
             raise ArtifactValidationError("MangaPlan exceeds the page budget")
+        if plan.target_page_count > len(plan.beats):
+            raise ArtifactValidationError(
+                "MangaPlan target_page_count cannot exceed its grounded beat count"
+            )
+        if len(plan.beats) > plan.target_page_count * context.constraints.max_panels_per_page:
+            raise ArtifactValidationError(
+                "MangaPlan beat count exceeds the per-page panel budget"
+            )
 
         source_refs = self._plan_source_refs(plan)
         expected = {
-            item.source_ref.source_unit_id: item.source_ref
-            for item in context.source_units
+            item.source_ref.source_unit_id: item.source_ref for item in context.source_units
         }
         for ref in source_refs:
             context_ref = expected.get(ref.source_unit_id)
@@ -261,15 +260,22 @@ class MangaDirectorToolService:
                 raise AuthorizationError(
                     f"MangaPlan source {ref.source_unit_id} is outside persisted evidence"
                 )
+        cited_source_ids = {ref.source_unit_id for ref in source_refs}
+        if not set(expected).issubset(cited_source_ids):
+            missing = ", ".join(sorted(set(expected) - cited_source_ids))
+            raise ArtifactValidationError(
+                f"MangaPlan omits selected ContextPack source units: {missing}"
+            )
         required_fact_ids = {fact.fact_id for fact in context.book_canon.facts}
-        cited_fact_ids = {
-            fact_id for beat in plan.beats for fact_id in beat.required_fact_ids
-        }
+        cited_fact_ids = {fact_id for beat in plan.beats for fact_id in beat.required_fact_ids}
+        if not cited_fact_ids.issubset(required_fact_ids):
+            unknown = ", ".join(sorted(cited_fact_ids - required_fact_ids))
+            raise ArtifactValidationError(
+                f"MangaPlan cites unknown ContextPack fact IDs: {unknown}"
+            )
         if not required_fact_ids.issubset(cited_fact_ids):
             missing = ", ".join(sorted(required_fact_ids - cited_fact_ids))
-            raise ArtifactValidationError(
-                f"MangaPlan omits required ContextPack facts: {missing}"
-            )
+            raise ArtifactValidationError(f"MangaPlan omits required ContextPack facts: {missing}")
 
         payload = plan.model_dump(mode="json")
         digest = content_hash(payload)

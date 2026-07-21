@@ -50,7 +50,7 @@ export default function LibraryPage() {
           </div>
           <div className="flex flex-col justify-between p-7 sm:p-9">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-accent-soft">Continue reading</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-accent-soft">Sample manga</p>
               <h2 className="mt-5 font-display text-3xl text-copy">{current.bookTitle}</h2>
               <p className="mt-3 text-base text-copy-secondary">{current.chapterLabel}</p>
               <div className="mt-8 grid grid-cols-2 gap-5 border-t border-white/15 pt-5 text-sm">
@@ -66,7 +66,7 @@ export default function LibraryPage() {
             </div>
             <Button asChild className="mt-9 w-full sm:w-fit">
               <Link href={`/books/${current.bookId}/manga/${current.projectId}`}>
-                Continue
+                Open sample
                 <ArrowRight aria-hidden size={17} weight="bold" />
               </Link>
             </Button>
@@ -76,14 +76,14 @@ export default function LibraryPage() {
         <aside className="flex min-h-[20rem] flex-col justify-between rounded-panel border border-white/15 bg-ink/70 p-7 sm:p-9">
           <div>
             <BookOpenText aria-hidden size={30} weight="duotone" className="text-accent-soft" />
-            <h2 className="mt-6 font-display text-2xl text-copy">Choose what comes next</h2>
+            <h2 className="mt-6 font-display text-2xl text-copy">Create your manga</h2>
             <p className="mt-3 text-sm leading-6 text-copy-secondary">
-              Select a new range from The Harbour Bell and carry this accepted world into the next chapter.
+              Upload your own PDF, choose a real parsed page range, and follow generation into the reader.
             </p>
           </div>
           <Button asChild className="mt-8 w-full" variant="secondary">
-            <Link href={`/books/${current.bookId}/scope`}>
-              Select pages
+            <Link href="/books/new">
+              Open a book
               <ArrowRight aria-hidden size={16} />
             </Link>
           </Button>
