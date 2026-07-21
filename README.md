@@ -45,13 +45,30 @@ Requirements:
 - pnpm 10.15.1 through Corepack
 - Python 3.12 and `uv`
 - Docker with Compose
+- `zsh` for the `start.sh` and `stop.sh` helper scripts
+- Chromium and FFmpeg/ffprobe for local Remotion export smoke tests
+
+Install JavaScript dependencies once:
 
 ```bash
 corepack enable
 corepack prepare pnpm@10.15.1 --activate
 corepack pnpm install
+```
+
+### Full Docker stack
+
+Run the local app stack:
+
+```bash
 cp .env.example .env
 ./start.sh
+```
+
+`./start.sh` creates `.env` from `.env.example` if it is missing, then runs:
+
+```bash
+docker compose --profile agent up -d
 ```
 
 The core services expose:
@@ -61,19 +78,70 @@ The core services expose:
 - MongoDB: `mongodb://localhost:27017`
 - Redis: `redis://localhost:6379`
 
-Agent and reel-render worker profiles are enabled separately after their owned
-packages are available.
+Stop the stack with:
+
+```bash
+./stop.sh
+```
+
+The `agent` profile is enabled by `start.sh`. The `reels` Compose profile is
+reserved for the render-worker container; it should not be treated as ready
+until `reel-renderer/Dockerfile` exists.
+
+Important local flags in `.env.example`:
+
+```env
+AGENTIC_MANGA_PIPELINE_V1=true
+REELS_ENABLED=false
+REEL_EXPORT_ENABLED=false
+```
+
+Reel playback/export is disabled by default for the full app until the backend
+produces accepted `MangaManifest` and `ReelSpec` records.
+
+### Frontend-only development
+
+Use this when working on UI against the configured backend URL:
+
+```bash
+corepack pnpm --filter @scrollstack/frontend dev
+```
+
+### Reel fixture export
+
+The reel renderer can export the committed preview fixture without a backend.
+Use absolute output paths:
+
+```bash
+SCROLLSTACK_BROWSER_EXECUTABLE=/usr/bin/chromium \
+corepack pnpm --filter @scrollstack/reel-renderer render -- --still --frame 0 --out /tmp/scrollstack-reel.png
+
+SCROLLSTACK_BROWSER_EXECUTABLE=/usr/bin/chromium \
+corepack pnpm --filter @scrollstack/reel-renderer render -- --out /tmp/scrollstack-reel.mp4
+```
+
+`SCROLLSTACK_BROWSER_EXECUTABLE` is optional if Remotion can find a supported
+browser automatically. `ffprobe` must be available on `PATH` for media
+verification.
 
 ## Verification
 
 ```bash
-cd backend && uv run pytest tests/ -q
-cd ../frontend && corepack pnpm typecheck && corepack pnpm build
-cd .. && corepack pnpm contracts:test
+corepack pnpm check
 docker compose --env-file .env.example config --quiet
 zsh -n start.sh
 zsh -n stop.sh
 git diff --check
+```
+
+Lane-specific checks:
+
+```bash
+(cd backend && uv run pytest tests/ -q)
+corepack pnpm --filter @scrollstack/frontend typecheck
+corepack pnpm --filter @scrollstack/frontend build
+corepack pnpm --filter @scrollstack/reel-renderer typecheck
+corepack pnpm --filter @scrollstack/reel-renderer test
 ```
 
 ## AI-assisted engineering provenance
