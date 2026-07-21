@@ -29,6 +29,15 @@ function textForPanel(panel: ManifestPanel | undefined): string | undefined {
   return panel?.narration?.[0] ?? panel?.dialogue?.[0]?.text;
 }
 
+/**
+ * Derived captions exist so muted playback still reads (§16.4). A scene that
+ * already draws its words — a narrator card, or bubbles in a dialogue exchange —
+ * must not also caption them: the viewer gets the same sentence twice, stacked,
+ * and the two boxes fight for the lower third. Scenes that carry no on-screen
+ * text still get a caption.
+ *
+ * An explicit caption track always wins over this; see `normalizedCaptions`.
+ */
 function fallbackCaptionTexts(
   scene: ReelScene,
   panels: ReadonlyMap<string, ManifestPanel>,
@@ -44,14 +53,14 @@ function fallbackCaptionTexts(
         .map((panelId) => textForPanel(panels.get(panelId)))
         .filter((text): text is string => Boolean(text))
         .map((text) => ({ text }));
-    case "dialogue_exchange":
-      return scene.dialogue.map((line) => ({ text: line.text, speakerId: line.speaker_id }));
     case "impact_cut": {
       const text = textForPanel(panels.get(scene.panel_id));
       return text ? [{ text }] : [{ text: scene.sfx_text }];
     }
+    case "dialogue_exchange":
     case "narrator_card":
-      return [{ text: scene.text }];
+      // Rendered as bubbles and as card copy respectively.
+      return [];
     case "page_turn": {
       const text = textForPanel(panels.get(scene.to_panel_id));
       return text ? [{ text }] : [];

@@ -1,5 +1,5 @@
-import { colors, motion } from "@scrollstack/design-tokens";
-import { spring, useCurrentFrame, useVideoConfig } from "remotion";
+import { colors } from "@scrollstack/design-tokens";
+import { Easing, interpolate, useCurrentFrame } from "remotion";
 
 export type BubbleMotion = "pop" | "slide" | "type_on";
 
@@ -17,37 +17,49 @@ export function SpeechBubble({
   motionPreset: BubbleMotion;
 }>) {
   const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
   const delay = index * 10;
-  const progress = spring({
-    fps,
-    frame: Math.max(0, frame - delay),
-    config: { stiffness: motion.springStiffness, damping: motion.springDamping },
-    durationInFrames: 20,
-  });
   const visibleCharacters = Math.max(
     1,
     Math.min(text.length, Math.floor(((frame - delay) / Math.max(1, text.length * 0.55)) * text.length)),
   );
   const shownText = motionPreset === "type_on" ? text.slice(0, visibleCharacters) : text;
-  const y = 16 + (index * 64) / Math.max(1, total);
   const alignRight = index % 2 === 1;
-  const transform =
-    motionPreset === "slide"
-      ? `translateX(${(alignRight ? 1 : -1) * (1 - progress) * 120}px)`
-      : `scale(${0.72 + progress * 0.28})`;
+  // Bubbles stack down the upper two thirds. The step is capped so a two-line
+  // exchange sits as a conversation rather than being flung to both extremes,
+  // and shrinks once there are enough lines to need the full band.
+  const y = 16 + index * Math.min(28, 56 / Math.max(1, total - 1));
+  // An overshooting curve reads as a pop without spring()'s hidden physics.
+  const easing = Easing.bezier(0.16, 1, 0.3, 1);
 
   return (
     <div
       style={{
         position: "absolute",
         zIndex: 40 + index,
-        top: `${Math.min(76, y)}%`,
+        top: `${Math.min(72, y)}%`,
         left: alignRight ? "28%" : "7%",
         right: alignRight ? "7%" : "28%",
-        transform,
+        translate:
+          motionPreset === "slide"
+            ? `${interpolate(frame, [delay, delay + 20], [(alignRight ? 1 : -1) * 120, 0], {
+                extrapolateLeft: "clamp",
+                extrapolateRight: "clamp",
+                easing,
+              })}px 0px`
+            : "0px 0px",
+        scale:
+          motionPreset === "slide"
+            ? 1
+            : interpolate(frame, [delay, delay + 20], [0.72, 1], {
+                extrapolateLeft: "clamp",
+                extrapolateRight: "clamp",
+                easing,
+              }),
         transformOrigin: alignRight ? "bottom right" : "bottom left",
-        opacity: progress,
+        opacity: interpolate(frame, [delay, delay + 12], [0, 1], {
+          extrapolateLeft: "clamp",
+          extrapolateRight: "clamp",
+        }),
       }}
     >
       <div
@@ -82,7 +94,10 @@ export function SpeechBubble({
       </div>
       <div
         style={{
-          marginTop: 20,
+          // The tail is a 44px square rotated 45deg sitting 34px below the
+          // bubble, so it reaches ~65px down. Anything less and it draws
+          // straight through the speaker name.
+          marginTop: 72,
           textAlign: alignRight ? "right" : "left",
           color: colors.textSecondary,
           fontFamily: "monospace",

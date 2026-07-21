@@ -1,4 +1,4 @@
-import { interpolate, useCurrentFrame } from "remotion";
+import { Easing, interpolate, useCurrentFrame } from "remotion";
 
 import { SceneShell, PanelImage, getPanelAsset, type SceneRendererProps } from "./shared";
 
@@ -8,32 +8,25 @@ export function PanelFocusSceneRenderer({ compiled, compiledScene }: SceneRender
   }
   const scene = compiledScene.scene;
   const frame = useCurrentFrame();
-  const progress = interpolate(frame, [0, Math.max(1, scene.duration_frames - 1)], [0, 1], {
-    extrapolateLeft: "clamp",
-    extrapolateRight: "clamp",
-  });
   const focus = scene.focus_box_pct;
+  // Camera moves toward the crop hint the manga lane chose, so the subject
+  // stays put instead of drifting off the safe area.
   const originX = focus ? focus.x_pct + focus.width_pct / 2 : 50;
   const originY = focus ? focus.y_pct + focus.height_pct / 2 : 50;
-  const scale =
-    scene.motion_preset === "pull_out"
-      ? 1.14 - progress * 0.14
-      : scene.motion_preset === "hold"
-        ? 1.03
-        : 1.02 + progress * 0.14;
-  const translateX =
-    scene.motion_preset === "pan_left"
-      ? 7 - progress * 14
-      : scene.motion_preset === "pan_right"
-        ? -7 + progress * 14
-        : 0;
+  const lastFrame = Math.max(1, scene.duration_frames - 1);
+  const ease = { extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: Easing.bezier(0.33, 0, 0.67, 1) } as const;
+  const scaleRange: readonly [number, number] =
+    scene.motion_preset === "pull_out" ? [1.14, 1.0] : scene.motion_preset === "hold" ? [1.03, 1.03] : [1.02, 1.16];
+  const panRange: readonly [number, number] =
+    scene.motion_preset === "pan_left" ? [7, -7] : scene.motion_preset === "pan_right" ? [-7, 7] : [0, 0];
 
   return (
     <SceneShell>
       <PanelImage
         asset={getPanelAsset(compiled, compiledScene, scene.panel_id)}
         style={{
-          transform: `translateX(${translateX}%) scale(${scale})`,
+          scale: interpolate(frame, [0, lastFrame], scaleRange, ease),
+          translate: `${interpolate(frame, [0, lastFrame], panRange, ease)}% 0%`,
           transformOrigin: `${originX}% ${originY}%`,
         }}
       />

@@ -118,15 +118,37 @@ describe("compileReel", () => {
   });
 
   it("validates derived captions before handing them to a renderer", () => {
-    const scenes = previewReelCompilationInput.spec.scenes.map((scene) =>
-      scene.scene_type === "narrator_card" ? { ...scene, text: "A".repeat(241) } : scene,
-    ) as ReelCompilationInput["spec"]["scenes"];
-    const input = withInput({
-      spec: { ...previewReelCompilationInput.spec, scenes },
-      captions: [],
-    });
+    // Panel narration may run to 1000 characters, far past the caption budget,
+    // so a caption derived from it must still be checked rather than trusted.
+    const manga = {
+      ...previewReelCompilationInput.manga,
+      panels: previewReelCompilationInput.manga.panels.map((panel, index) =>
+        index === 0 ? { ...panel, narration: ["A".repeat(600)] } : panel,
+      ),
+    } as ReelCompilationInput["manga"];
 
-    expect(() => compileReel(input)).toThrow(ReelValidationError);
+    expect(() => compileReel(withInput({ manga, captions: [] }))).toThrow(ReelValidationError);
+  });
+
+  it("does not caption text a scene already draws on screen", () => {
+    const compiled = compileReel(withInput({ captions: [] }));
+    const narratorCard = previewReelCompilationInput.spec.scenes.find(
+      (scene) => scene.scene_type === "narrator_card",
+    );
+    const dialogue = previewReelCompilationInput.spec.scenes.find(
+      (scene) => scene.scene_type === "dialogue_exchange",
+    );
+    if (narratorCard?.scene_type !== "narrator_card") throw new Error("fixture lost its narrator card");
+    if (dialogue?.scene_type !== "dialogue_exchange") throw new Error("fixture lost its dialogue scene");
+
+    // The card draws this copy itself; captioning it too would stack the same
+    // sentence twice in the lower third.
+    expect(compiled.captions.map((cue) => cue.text)).not.toContain(narratorCard.text);
+    for (const line of dialogue.dialogue) {
+      expect(compiled.captions.map((cue) => cue.text)).not.toContain(line.text);
+    }
+    // Scenes with no on-screen words still caption, so muted playback reads.
+    expect(compiled.captions.length).toBeGreaterThan(0);
   });
 });
 
