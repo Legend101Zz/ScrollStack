@@ -132,7 +132,12 @@ async function sourceFor(assetId: string, filePath: string): Promise<LocalReelAs
   };
 }
 
-const { values } = parseArgs({ options: { reuse: { type: "boolean", default: false } } });
+const { values } = parseArgs({
+  options: {
+    reuse: { type: "boolean", default: false },
+    out: { type: "string" },
+  },
+});
 await mkdir(OUTPUT_ROOT, { recursive: true });
 
 const model = process.env.IMAGE_MODEL?.trim() || readEnv("IMAGE_MODEL");
@@ -197,7 +202,7 @@ compileReel(input);
 const { receipt } = await renderReelWithReceipt({
   input,
   bundle,
-  outputLocation: "/home/utkarsh/Pictures/ScrollStack/REEL-generated.mp4",
+  outputLocation: values.out ? path.resolve(values.out) : "/home/utkarsh/Pictures/ScrollStack/REEL-generated.mp4",
   browserExecutable: process.env.SCROLLSTACK_BROWSER_EXECUTABLE,
   overwrite: true,
 });
