@@ -1,4 +1,4 @@
-import { reelAudioKit } from "@scrollstack/reel-components";
+import { reelAudioKitAll } from "@scrollstack/reel-components";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -19,7 +19,7 @@ export function reelAudioKitRoot(): string {
  * truncated kit file fails the render instead of shipping silently.
  */
 export function reelAudioKitSources(root: string = reelAudioKitRoot()): LocalReelAssetSource[] {
-  return reelAudioKit.map((item) => ({
+  return reelAudioKitAll.map((item) => ({
     assetId: item.soundId,
     contentHash: item.contentHash,
     kind: "audio" as const,

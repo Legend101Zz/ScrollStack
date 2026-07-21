@@ -11,14 +11,17 @@ export type ReelAudioKitSoundId =
   | "sfx_page_turn"
   | "sfx_shutter";
 
+export type ReelAudioKitBedId = "bed_tension" | "bed_resolve";
+
 export type ReelAudioKitSound = Readonly<{
-  soundId: ReelAudioKitSoundId;
+  soundId: ReelAudioKitSoundId | ReelAudioKitBedId;
   fileName: string;
   /** sha256 of the vendored file; the staged path must match it. */
   contentHash: string;
   durationMs: number;
   mimeType: string;
-  license: "CC0";
+  /** CC0 for the sourced one-shots; "generated" for beds this repository synthesized. */
+  license: "CC0" | "generated";
 }>;
 
 function sound(value: ReelAudioKitSound): ReelAudioKitSound {
@@ -60,14 +63,49 @@ export const reelAudioKit: readonly ReelAudioKitSound[] = Object.freeze([
   }),
 ]);
 
-export const reelAudioKitSounds: Readonly<Record<ReelAudioKitSoundId, ReelAudioKitSound>> =
-  Object.freeze(
-    Object.fromEntries(reelAudioKit.map((item) => [item.soundId, item])) as Record<
-      ReelAudioKitSoundId,
-      ReelAudioKitSound
-    >,
-  );
+/**
+ * Synthesized by `assets/audio/generate-beds.sh`, so the repository owns them
+ * outright. Peaks sit near -22 dBFS, far under the one-shots, because the bed
+ * is atmosphere and must never compete with a cut.
+ */
+export const reelAudioKitBeds: readonly ReelAudioKitSound[] = Object.freeze([
+  sound({
+    soundId: "bed_tension",
+    fileName: "bed-tension.mp3",
+    contentHash: "5b09c2551021635b0709318f8679a0ee98b2c7a1466f9997717bb1e1f5161057",
+    durationMs: 30_000,
+    mimeType: "audio/mpeg",
+    license: "generated",
+  }),
+  sound({
+    soundId: "bed_resolve",
+    fileName: "bed-resolve.mp3",
+    contentHash: "36f09da52db94df016f175b6583398ca71a07cbb65f466a44bfdd87cb9a522c7",
+    durationMs: 30_000,
+    mimeType: "audio/mpeg",
+    license: "generated",
+  }),
+]);
+
+/** Everything the kit ships: one-shots and beds. */
+export const reelAudioKitAll: readonly ReelAudioKitSound[] = Object.freeze([
+  ...reelAudioKit,
+  ...reelAudioKitBeds,
+]);
+
+export const reelAudioKitSounds: Readonly<
+  Record<ReelAudioKitSoundId | ReelAudioKitBedId, ReelAudioKitSound>
+> = Object.freeze(
+  Object.fromEntries(reelAudioKitAll.map((item) => [item.soundId, item])) as Record<
+    ReelAudioKitSoundId | ReelAudioKitBedId,
+    ReelAudioKitSound
+  >,
+);
 
 export function isReelAudioKitSoundId(value: string): value is ReelAudioKitSoundId {
-  return Object.hasOwn(reelAudioKitSounds, value);
+  return reelAudioKit.some((item) => item.soundId === value);
+}
+
+export function isReelAudioKitBedId(value: string): value is ReelAudioKitBedId {
+  return reelAudioKitBeds.some((item) => item.soundId === value);
 }

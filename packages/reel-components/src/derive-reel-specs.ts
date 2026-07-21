@@ -24,6 +24,8 @@ export type DeriveReelSpecsOptions = Readonly<{
    * reference kit asset IDs, so the caller must resolve them before rendering.
    */
   sfx?: boolean;
+  /** Attach a synthesized music bed. Same resolution requirement as `sfx`. */
+  music?: boolean;
 }>;
 
 const DEFAULT_TARGET_DURATION_FRAMES = 600;
@@ -197,6 +199,16 @@ function sfxCuesFor(scenes: readonly ReelScene[]): SfxCue[] {
   return cues;
 }
 
+/**
+ * A reel that ends on payoff or resolution gets the calmer bed; anything still
+ * unresolved keeps the tension bed. Decided by the last beat, because that is
+ * what the viewer is left sitting in.
+ */
+function bedFor(purposes: readonly string[]): "bed_tension" | "bed_resolve" {
+  const last = purposes.at(-1);
+  return last === "payoff" || last === "explanation" ? "bed_resolve" : "bed_tension";
+}
+
 function dedupeSourceRefs(panels: readonly ManifestPanel[]): SourceRef[] {
   const seen = new Map<string, SourceRef>();
   for (const panel of panels) {
@@ -266,7 +278,16 @@ export function deriveReelSpecs(
       beat_ids: beatIds,
       format: { ...REEL_FORMAT, duration_frames: frame },
       style_kit_id: SCROLLSTACK_STYLE_KIT_ID,
-      audio: { sfx_cues: options.sfx ? sfxCuesFor(scenes) : [] },
+      audio: {
+        sfx_cues: options.sfx ? sfxCuesFor(scenes) : [],
+        ...(options.music
+          ? {
+              music_asset_id: bedFor(
+                group.map((draft) => purposeByBeat.get(draft.panel.beat_ids[0]) ?? "setup"),
+              ),
+            }
+          : {}),
+      },
       scenes,
       interaction_map: interactionMap,
       source_refs: dedupeSourceRefs(group.map((draft) => draft.panel)) as ReelSpec["source_refs"],

@@ -11,9 +11,13 @@ export {
 } from "./catalog";
 export {
   REEL_AUDIO_KIT_VERSION,
+  isReelAudioKitBedId,
   isReelAudioKitSoundId,
   reelAudioKit,
+  reelAudioKitAll,
+  reelAudioKitBeds,
   reelAudioKitSounds,
+  type ReelAudioKitBedId,
   type ReelAudioKitSound,
   type ReelAudioKitSoundId,
 } from "./audio-kit";
